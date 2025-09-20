@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🃏 Poker Awards Board</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e2e8f0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            color: #f1f5f9;
+            padding: 40px;
+            text-align: center;
+            position: relative;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 3.5em;
+            margin-bottom: 16px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+        }
+
+        .tournament-info {
+            font-size: 1.3em;
+            opacity: 0.85;
+            margin-bottom: 16px;
+            font-weight: 400;
+        }
+
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 0.9em;
+            font-weight: 600;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .refresh-note {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 20px;
+            margin: 24px;
+            border-radius: 12px;
+            text-align: center;
+            color: #94a3b8;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .awards-section {
+            padding: 40px;
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .awards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+        }
+
+        .award-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+            padding: 32px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+        }
+
+        .award-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2);
+        }
+
+        .award-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        }
+
+        /* Champion and Runner-up special styling */
+        .award-card:nth-child(1) {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%);
+            border-color: rgba(251, 191, 36, 0.3);
+        }
+
+        .award-card:nth-child(1)::before {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+            height: 6px;
+        }
+
+        .award-card:nth-child(2) {
+            background: linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%);
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+
+        .award-card:nth-child(2)::before {
+            background: linear-gradient(135deg, #94a3b8, #64748b);
+            height: 5px;
+        }
+
+        .award-title {
+            font-size: 1.4em;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .award-emoji {
+            font-size: 2.2em;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+
+        .award-winner {
+            font-size: 2em;
+            color: #fbbf24;
+            font-weight: 800;
+            margin-bottom: 12px;
+            line-height: 1.1;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .award-description {
+            color: #94a3b8;
+            font-size: 1.05em;
+            margin-bottom: 16px;
+            font-style: italic;
+            line-height: 1.5;
+        }
+
+        .award-stat {
+            color: #22c55e;
+            font-weight: 600;
+            font-size: 0.95em;
+            background: rgba(34, 197, 94, 0.1);
+            padding: 8px 14px;
+            border-radius: 20px;
+            display: inline-block;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        /* Special styling for Champion and Runner-up */
+        .award-card:nth-child(1) .award-winner {
+            color: #fbbf24;
+            font-size: 2.4em;
+        }
+
+        .award-card:nth-child(2) .award-winner {
+            color: #94a3b8;
+            font-size: 2.2em;
+        }
+
+        .award-card:nth-child(1) .award-stat {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border-color: rgba(251, 191, 36, 0.3);
+        }
+
+        .award-card:nth-child(2) .award-stat {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+
+        /* Award-specific accent colors */
+        .award-card:has(.award-title:contains("🔥"))::before {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .award-card:has(.award-title:contains("🍀"))::before {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+
+        .award-card:has(.award-title:contains("🧊"))::before {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }
+
+        .award-card:has(.award-title:contains("💀"))::before {
+            background: linear-gradient(135deg, #a855f7, #9333ea);
+        }
+
+        .award-card:has(.award-title:contains("🤠"))::before {
+            background: linear-gradient(135deg, #eab308, #ca8a04);
+        }
+
+        .award-card:has(.award-title:contains("🌪️"))::before {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+        }
+
+        .award-card:has(.award-title:contains("🎯"))::before {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        }
+
+        .award-card:has(.award-title:contains("⚡"))::before {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .award-card:has(.award-title:contains("🃏"))::before {
+            background: linear-gradient(135deg, #475569, #334155);
+        }
+
+        .award-card:has(.award-title:contains("⚓"))::before {
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+        }
+
+        .award-card:has(.award-title:contains("🐦"))::before {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+        }
+
+        .award-card:has(.award-title:contains("🎭"))::before {
+            background: linear-gradient(135deg, #ec4899, #db2777);
+        }
+
+        .special-section {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+            padding: 40px;
+            margin: 32px 24px;
+            border-radius: 20px;
+            text-align: center;
+            color: #f1f5f9;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .special-section h3 {
+            font-size: 2.2em;
+            margin-bottom: 16px;
+            font-weight: 700;
+            color: #fca5a5;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .bad-beat-list {
+            list-style: none;
+            padding: 0;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        .bad-beat-list li {
+            margin: 12px 0;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 16px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tournament-stats {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
+            padding: 32px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .stats-item {
+            display: inline-block;
+            margin: 0 24px;
+            font-size: 1.1em;
+        }
+
+        .stats-value {
+            font-weight: 800;
+            color: #fbbf24;
+            font-size: 1.8em;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #64748b;
+            font-style: italic;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        .update-animation {
+            animation: updatePulse 0.6s ease-in-out;
+        }
+
+        @keyframes updatePulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .awards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2.8em;
+            }
+            
+            .stats-item {
+                display: block;
+                margin: 16px 0;
+            }
+            
+            .container {
+                margin: 10px;
+                border-radius: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🃏 Bingo Poker Pro's Presents</h1>
+            <div class="tournament-info">{{ results.tournament_date }}</div>
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                Live Updates
+            </div>
+        </div>
+
+        <div class="refresh-note">
+            🔄 This board updates automatically when new tournaments are uploaded - no refresh needed!
+        </div>
+
+        <div class="awards-section">
+            <div class="awards-grid" id="awardsGrid">
+                {% for title, award in results.awards.items() %}
+                <div class="award-card">
+                    <div class="award-title">
+                        <span class="award-emoji">{{ title.split()[0] }}</span>
+                        <span>{{ ' '.join(title.split()[1:]) }}</span>
+                    </div>
+                    <div class="award-winner">{{ award.winner }}</div>
+                    <div class="award-description">{{ award.description }}</div>
+                    <div class="award-stat">{{ award.stat }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if results.total_players >= 4 %}
+        <div class="special-section">
+            <h3>🩹 Preparation H Club</h3>
+            <p style="margin-bottom: 20px; font-size: 1.1em;">
+                <em>"Had it on the flop... robbed on the river"</em>
+            </p>
+            <ul class="bad-beat-list">
+                <li>🔨 Kentie Boy (QQ) cracked by Blazingsun81 (AK)</li>
+                <li>💔 Esk (AK) rivered by Fuzzy Nips (AQ)</li>
+                <li>😱 Trofimuk (JJ) outdrawn by Sick Nickel (AT suited)</li>
+            </ul>
+        </div>
+        {% endif %}
+        </div>
+
+        <div class="tournament-stats">
+            <div class="stats-item">
+                <div class="stats-value">{{ results.total_players }}</div>
+                <div>Players</div>
+            </div>
+            <div class="stats-item">
+                <div class="stats-value">{{ results.awards|length }}</div>
+                <div>Awards</div>
+            </div>
+            <div class="stats-item">
+                <div class="stats-value" id="connectionStatus">🟢 Connected</div>
+                <div>Status</div>
+            </div>
+            
+            <div class="last-updated">
+                Last updated: <span id="lastUpdated">{{ results.tournament_date }}</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Server-Sent Events for real-time updates
+        let eventSource;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        function connectToUpdates() {
+            eventSource = new EventSource('/events');
+            
+            eventSource.onopen = function() {
+                console.log('Connected to live updates');
+                document.getElementById('connectionStatus').innerHTML = '🟢 Connected';
+                reconnectAttempts = 0;
+            };
+
+            eventSource.onmessage = function(event) {
+                console.log('Received update:', event.data);
+            };
+
+            eventSource.addEventListener('init', function(event) {
+                console.log('Initial data received');
+                const data = JSON.parse(event.data);
+                updateBoard(data);
+            });
+
+            eventSource.addEventListener('update', function(event) {
+                console.log('Board update received');
+                const data = JSON.parse(event.data);
+                updateBoard(data, true);
+                
+                // Show a brief notification
+                showUpdateNotification();
+            });
+
+            eventSource.onerror = function(event) {
+                console.log('SSE connection error');
+                document.getElementById('connectionStatus').innerHTML = '🔴 Reconnecting...';
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    setTimeout(() => {
+                        reconnectAttempts++;
+                        connectToUpdates();
+                    }, 2000);
+                } else {
+                    document.getElementById('connectionStatus').innerHTML = '🔴 Offline';
+                }
+            };
+        }
+
+        function updateBoard(data, animate = false) {
+            const awardsGrid = document.getElementById('awardsGrid');
+            const lastUpdatedEl = document.getElementById('lastUpdated');
+            
+            // Add animation class if this is a live update
+            if (animate) {
+                awardsGrid.classList.add('update-animation');
+                setTimeout(() => {
+                    awardsGrid.classList.remove('update-animation');
+                }, 600);
+            }
+            
+            // Update awards grid
+            awardsGrid.innerHTML = '';
+            Object.entries(data.awards).forEach(([title, award]) => {
+                const titleParts = title.split(' ');
+                const emoji = titleParts[0];
+                const titleText = titleParts.slice(1).join(' ');
+                
+                const cardEl = document.createElement('div');
+                cardEl.className = 'award-card';
+                cardEl.innerHTML = `
+                    <div class="award-title">
+                        <span class="award-emoji">${emoji}</span>
+                        <span>${titleText}</span>
+                    </div>
+                    <div class="award-winner">${award.winner}</div>
+                    <div class="award-description">${award.description}</div>
+                    <div class="award-stat">${award.stat}</div>
+                `;
+                awardsGrid.appendChild(cardEl);
+            });
+            
+            // Update timestamp
+            lastUpdatedEl.textContent = data.tournament_date;
+        }
+
+        function showUpdateNotification() {
+            // Create a temporary notification
+            const notification = document.createElement('div');
+            notification.innerHTML = '🎉 Awards board updated!';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #27ae60;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+                z-index: 1000;
+                font-weight: bold;
+                animation: slideIn 0.3s ease-out;
+            `;
+            
+            // Add slide-in animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(notification);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => {
+                    notification.remove();
+                    style.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        // Initialize connection when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            connectToUpdates();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html>
