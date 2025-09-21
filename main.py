@@ -1,9 +1,11 @@
 import os
 import json
 import asyncio
+import re
 from datetime import datetime
 from typing import Dict, Any, List
 from pathlib import Path
+from io import BytesIO
 
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException
 from fastapi.templating import Jinja2Templates
@@ -12,15 +14,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
-# PDF parsing
-try:
-    import pdfplumber
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
+app = FastAPI(title="Bingo Poker Pro's Awards Board", description="Tournament awards tracking system")
 
-app = FastAPI(title="Poker Awards Board")
-
+# Add CORS middleware for better browser compatibility
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,8 +25,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Templates and static files
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Only mount static files if directory exists
+if Path("static").exists():
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Configuration - change this secret path!
 SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "poker-club-2025-upload")
@@ -50,13 +50,12 @@ class SSEManager:
     
     async def broadcast_update(self, data):
         dead_connections = []
-        for send_func in self._connections[:]:  # Copy list to avoid modification during iteration
+        for send_func in self._connections[:]:
             try:
                 await send_func({"event": "update", "data": json.dumps(data)})
             except:
                 dead_connections.append(send_func)
         
-        # Clean up dead connections
         for dead_conn in dead_connections:
             self.remove_connection(dead_conn)
 
@@ -64,16 +63,10 @@ sse_manager = SSEManager()
 
 # Awards calculation logic
 class PokerAwardsParser:
-    def parse_pdf(self, pdf_content: bytes) -> Dict[str, Any]:
-        """Parse poker PDF and calculate awards"""
+    def parse_txt(self, content: bytes) -> Dict[str, Any]:
+        """Parse poker text file and calculate awards"""
         try:
-            if PDF_AVAILABLE:
-                # Real PDF parsing logic here
-                players_data = self._extract_from_pdf(pdf_content)
-            else:
-                # Fallback to sample data for demo
-                players_data = self._generate_sample_players()
-            
+            players_data = self._extract_from_txt(content)
             awards = self._calculate_awards(players_data)
             
             # Extract tournament info from players_data if available
@@ -87,42 +80,35 @@ class PokerAwardsParser:
                 "last_updated": datetime.now().isoformat()
             }
         except Exception as e:
-            print(f"Error parsing PDF: {e}")
+            print(f"Error parsing text file: {e}")
             return self._generate_sample_data()
     
-    def _extract_from_pdf(self, pdf_content: bytes):
-        """Extract player data from actual PokerStars PDF"""
-        import re
-        from io import BytesIO
-        
-        with pdfplumber.open(BytesIO(pdf_content)) as pdf:
-            full_text = ""
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    full_text += text + "\n"
+    def _extract_from_txt(self, content: bytes):
+        """Extract player data from PokerStars text file"""
+        # Convert bytes to text
+        text = content.decode('utf-8')
         
         # Initialize data structures
         players = {}
         tournament_info = {}
         
         # Extract tournament information
-        tournament_match = re.search(r'Tournament #(\d+)', full_text)
+        tournament_match = re.search(r'Tournament #(\d+)', text)
         if tournament_match:
             tournament_info['id'] = tournament_match.group(1)
         
-        date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', full_text)
+        date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', text)
         if date_match:
             tournament_info['date'] = date_match.group(1)
         
         # Extract all hands
-        hands = re.findall(r'\*{11} # \d+ \*{14}(.*?)(?=\*{11} # \d+ \*{14}|\Z)', full_text, re.DOTALL)
+        hands = re.findall(r'\*{11} # \d+ \*{14}(.*?)(?=\*{11} # \d+ \*{14}|\Z)', text, re.DOTALL)
         
         for hand_text in hands:
             self._parse_hand(hand_text, players)
         
         # Calculate final positions from chip counts and eliminations
-        self._determine_final_positions(players, full_text)
+        self._determine_final_positions(players, text)
         
         # Count total unique players
         tournament_info['player_count'] = len(players)
@@ -134,8 +120,6 @@ class PokerAwardsParser:
     
     def _parse_hand(self, hand_text: str, players: Dict):
         """Parse individual hand and update player statistics"""
-        import re
-        
         # Extract players and their actions
         seat_pattern = r'Seat \d+: (\w+(?:\*\d+)?)\s*\((\d+) in chips\)'
         seats = re.findall(seat_pattern, hand_text)
@@ -210,34 +194,13 @@ class PokerAwardsParser:
     
     def _determine_final_positions(self, players: Dict, full_text: str):
         """Determine final tournament positions"""
-        # For now, use chip counts as a proxy for positions
-        # In a real implementation, you'd parse elimination order
+        # Use chip counts as a proxy for positions
         chip_counts = [(name, data['max_chips']) for name, data in players.items() 
                       if name != 'tournament_info']
         chip_counts.sort(key=lambda x: x[1], reverse=True)
         
         for position, (player_name, chips) in enumerate(chip_counts, 1):
             players[player_name]['final_position'] = position
-    
-    def _generate_sample_players(self):
-        """Generate realistic sample player data"""
-        import random
-        players = {}
-        names = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry"]
-        
-        for name in random.sample(names, random.randint(4, 7)):
-            hands = random.randint(45, 120)
-            players[name] = {
-                "hands_played": hands,
-                "raises": random.randint(5, hands//3),
-                "calls": random.randint(10, hands//2),
-                "folds": random.randint(hands//4, hands),
-                "showdown_wins": random.randint(2, 15),
-                "showdown_total": random.randint(8, 25),
-                "chips_won": random.randint(1000, 50000),
-                "position": random.randint(1, 8)
-            }
-        return players
     
     def _calculate_awards(self, players_data: Dict[str, Dict]) -> Dict[str, Dict]:
         """Calculate fun club-style awards from parsed player data"""
@@ -311,24 +274,49 @@ class PokerAwardsParser:
                 "stat": "Classic rock-solid play"
             }
         
-        # Loosest Player
-        if aggressive_players:
-            loosest = max(aggressive_players,
-                        key=lambda x: x[1]['hands_voluntarily_played'] / max(x[1]['hands_played'], 1))
-            if loosest[0] != tightest[0]:  # Don't give same person both awards
-                awards["🎲 Loosest"] = {
-                    "winner": loosest[0],
-                    "description": "Jumped in with anything that had two cards",
-                    "stat": "YOLO poker at its finest"
-                }
-        
-        # Action Player
+        # Donkey (most hands played)
         action_player = max(players.items(), key=lambda x: x[1]['hands_played'])
-        awards["⚡ Action Player"] = {
+        awards["🐴 Donkey"] = {
             "winner": action_player[0],
-            "description": "Always in the mix, never took a break",
+            "description": "Played way too many hands, couldn't fold to save their life",
             "stat": f"Played {action_player[1]['hands_played']} hands"
         }
+        
+        # ABC Player (predictable, straightforward play)
+        if aggressive_players:
+            abc_candidates = [(name, data) for name, data in aggressive_players
+                            if 0.15 < (data['aggressive_actions'] / data['hands_played']) < 0.35]
+            if abc_candidates:
+                abc_player = max(abc_candidates, 
+                               key=lambda x: x[1].get('showdown_wins', 0))
+                awards["📚 ABC Player"] = {
+                    "winner": abc_player[0],
+                    "description": "Played textbook poker, predictable as clockwork",
+                    "stat": "By-the-book basic strategy"
+                }
+        
+        # Biggest Bluffer
+        bluffer_candidates = [(name, data) for name, data in players.items() 
+                            if data.get('bets', 0) > 2]
+        if bluffer_candidates:
+            bluffer = max(bluffer_candidates,
+                        key=lambda x: x[1]['bets'] / max(x[1].get('showdowns', 1), 1))
+            awards["🎭 Biggest Bluffer"] = {
+                "winner": bluffer[0],
+                "description": "Firing barrels with air, keeping the table guessing",
+                "stat": "Master of the poker face"
+            }
+        
+        # Bad Beat Victim (unlucky at showdown)
+        if showdown_players:
+            bad_beat_victim = min(showdown_players,
+                                key=lambda x: x[1]['showdown_wins'] / max(x[1]['showdowns'], 1))
+            win_rate = (bad_beat_victim[1]['showdown_wins'] / bad_beat_victim[1]['showdowns']) * 100
+            awards["💔 Bad Beat Victim"] = {
+                "winner": bad_beat_victim[0],
+                "description": "The poker gods showed no mercy tonight",
+                "stat": f"{win_rate:.0f}% showdown win rate"
+            }
         
         # Bubble Boy (if enough players)
         if len(players) >= 4:
@@ -342,125 +330,6 @@ class PokerAwardsParser:
                     "stat": "So close to cashing, yet so far"
                 }
         
-        # Biggest Bluffer (most folds after betting)
-        bluffer_candidates = [(name, data) for name, data in players.items() 
-                            if data.get('bets', 0) > 2]
-        if bluffer_candidates:
-            # Approximate bluffing by bet-to-showdown ratio
-            bluffer = max(bluffer_candidates,
-                        key=lambda x: x[1]['bets'] / max(x[1].get('showdowns', 1), 1))
-            awards["🎭 Biggest Bluffer"] = {
-                "winner": bluffer[0],
-                "description": "Firing barrels with air, keeping the table guessing",
-                "stat": "Master of the poker face"
-            }
-        
-        # Sheriff (most calls)
-        if aggressive_players:
-            sheriff = max(aggressive_players, key=lambda x: x[1]['calls'])
-            awards["🤠 Sheriff"] = {
-                "winner": sheriff[0],
-                "description": "Always ready to call out the bluffers",
-                "stat": "Keepin' the peace at the table"
-            }
-        
-        # Chaos Agent (most variance in play)
-        chaos_candidates = [(name, data) for name, data in players.items() 
-                          if data['hands_played'] > 5]
-        if chaos_candidates:
-            chaos_agent = max(chaos_candidates,
-                            key=lambda x: abs(x[1]['aggressive_actions'] - x[1]['passive_actions']))
-            awards["🌪️ Chaos Agent"] = {
-                "winner": chaos_agent[0],
-                "description": "Turned every hand into a rollercoaster ride",
-                "stat": "Unpredictability incarnate"
-            }
-        
-        # Sniper (selective but deadly)
-        if aggressive_players:
-            sniper_candidates = [(name, data) for name, data in aggressive_players 
-                               if data['hands_voluntarily_played'] / data['hands_played'] < 0.3]
-            if sniper_candidates:
-                sniper = max(sniper_candidates, 
-                           key=lambda x: x[1].get('showdown_wins', 0))
-                awards["🎯 Sniper"] = {
-                    "winner": sniper[0],
-                    "description": "Picked their spots perfectly and struck hard",
-                    "stat": "Precision over volume"
-                }
-        
-        # Comeback Kid (if position improved significantly)
-        position_players = [(name, data) for name, data in players.items() 
-                          if data.get('final_position', 999) <= len(players) // 2]
-        if len(position_players) > 2:
-            # Look for someone who made it far despite early struggles
-            comeback_kid = min(position_players, 
-                             key=lambda x: x[1].get('total_won', 0) - x[1]['max_chips'])
-            awards["⚡ Comeback Kid"] = {
-                "winner": comeback_kid[0],
-                "description": "Rose from the ashes when all seemed lost",
-                "stat": "Never count them out"
-            }
-        
-        # Card Rack (if high showdown win rate)
-        if showdown_players:
-            card_rack = max(showdown_players,
-                          key=lambda x: x[1]['showdown_wins'])
-            if card_rack[1]['showdown_wins'] >= 3:
-                awards["🃏 Card Rack"] = {
-                    "winner": card_rack[0],
-                    "description": "The deck was their best friend tonight",
-                    "stat": "Cards don't lie"
-                }
-        
-        # Iceman (least emotional decisions)
-        if aggressive_players:
-            iceman_candidates = [(name, data) for name, data in aggressive_players
-                               if data['checks'] + data['folds'] > data['calls'] + data['raises']]
-            if iceman_candidates:
-                iceman = max(iceman_candidates,
-                           key=lambda x: x[1]['checks'] / max(x[1]['hands_played'], 1))
-                awards["🧊 Iceman"] = {
-                    "winner": iceman[0],
-                    "description": "Cool, calm, and calculated every decision",
-                    "stat": "Nerves of steel"
-                }
-        
-        # Early Bird (if eliminated early despite aggressive play)
-        early_exits = [(name, data) for name, data in players.items() 
-                      if data.get('final_position', 1) > len(players) * 0.7]
-        if early_exits:
-            early_bird = max(early_exits, 
-                           key=lambda x: x[1]['aggressive_actions'])
-            awards["🐦 Early Bird"] = {
-                "winner": early_bird[0],
-                "description": "Went out swinging with guns blazing",
-                "stat": "Live fast, die young"
-            }
-        
-        # Table Captain (most hands played + high aggression)
-        if aggressive_players:
-            captain_score = lambda x: x[1]['hands_played'] + (x[1]['aggressive_actions'] * 2)
-            captain = max(aggressive_players, key=captain_score)
-            awards["⚓ Table Captain"] = {
-                "winner": captain[0],
-                "description": "Commanded respect and controlled the action",
-                "stat": "Natural born leader"
-            }
-        
-        # Lucky Charm (if won multiple showdowns with weak hands)
-        if showdown_players:
-            lucky_candidates = [(name, data) for name, data in showdown_players
-                              if data['showdown_wins'] >= 2]
-            if lucky_candidates:
-                lucky_charm = max(lucky_candidates,
-                                key=lambda x: x[1]['showdown_wins'] - x[1]['aggressive_actions'])
-                awards["🍀 Lucky Charm"] = {
-                    "winner": lucky_charm[0],
-                    "description": "Caught miracle cards when it mattered most",
-                    "stat": "Blessed by the poker gods"
-                }
-        
         return awards
     
     def _get_sample_awards(self):
@@ -469,7 +338,7 @@ class PokerAwardsParser:
             "🏆 Tournament Champion": {
                 "winner": "Blazingsun81", 
                 "description": "Survived the chaos and claimed the crown", 
-                "stat": "Outlasted 6 other players"
+                "stat": "Outlasted 5 other players"
             },
             "🔥 Most Aggressive": {
                 "winner": "Fuzzy Nips", 
@@ -502,15 +371,9 @@ class PokerAwardsParser:
         """Fallback sample data"""
         return {
             "tournament_date": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
+            "tournament_id": "3928736979",
             "total_players": 6,
-            "awards": {
-                "🏆 Tournament Champion": {"winner": "Alice", "description": "1st Place Winner", "stat": "Position #1"},
-                "🥈 Runner Up": {"winner": "Bob", "description": "2nd Place", "stat": "Position #2"},
-                "🔥 Most Aggressive": {"winner": "Charlie", "description": "Most raises", "stat": "23.4% of hands"},
-                "📞 Calling Station": {"winner": "Diana", "description": "Never folds", "stat": "2.3 calls per fold"},
-                "🍀 Luckiest Player": {"winner": "Eve", "description": "Best showdown wins", "stat": "75.0% wins"},
-                "🤐 Tightest Player": {"winner": "Frank", "description": "Most selective", "stat": "Only 34 hands"}
-            },
+            "awards": self._get_sample_awards(),
             "last_updated": datetime.now().isoformat()
         }
 
@@ -553,16 +416,16 @@ async def upload_page(request: Request):
 
 @app.post(f"/upload/{SECRET_UPLOAD_PATH}/process")
 async def process_upload(file: UploadFile = File(...)):
-    """Process the uploaded PDF"""
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(400, "Please upload a PDF file")
+    """Process the uploaded TXT file"""
+    if not file.filename.endswith('.txt'):
+        raise HTTPException(400, "Please upload a TXT file")
     
     try:
-        # Read PDF content
+        # Read TXT content
         content = await file.read()
         
         # Parse and calculate awards
-        results = parser.parse_pdf(content)
+        results = parser.parse_txt(content)
         
         # Save results
         save_results(results)
@@ -604,4 +467,5 @@ async def stream_events(request: Request):
     return EventSourceResponse(event_stream())
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
