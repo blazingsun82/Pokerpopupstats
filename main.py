@@ -87,7 +87,8 @@ class PokerAwardsParser:
         """Extract player data from PokerStars text file"""
         # Convert bytes to text
         text = content.decode('utf-8')
-        
+        print(f"File content length: {len(text)}")
+        print(f"First 500 characters: {text[:500]}")
         # Initialize data structures
         players = {}
         tournament_info = {}
@@ -103,6 +104,8 @@ class PokerAwardsParser:
         
         # Extract all hands
         hands = re.findall(r'\*{11} # \d+ \*{14}(.*?)(?=\*{11} # \d+ \*{14}|\Z)', text, re.DOTALL)
+        print(f"Found {len(hands)} hands")
+        print(f"Tournament ID found: {tournament_info.get('id', 'None')}")
         
         for hand_text in hands:
             self._parse_hand(hand_text, players)
