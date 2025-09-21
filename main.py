@@ -33,7 +33,7 @@ if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Configuration - change this secret path!
-SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "poker-club-2025-upload")
+SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "bingo-poker-secret-2025")
 RESULTS_FILE = Path("results.json")
 
 # SSE connection management
@@ -66,8 +66,11 @@ class PokerAwardsParser:
     def parse_txt(self, content: bytes) -> Dict[str, Any]:
         """Parse poker text file and calculate awards"""
         try:
+            print(f"Starting to parse file of size: {len(content)} bytes")
             players_data = self._extract_from_txt(content)
+            print(f"Extracted data for {len([k for k in players_data.keys() if k != 'tournament_info'])} players")
             awards = self._calculate_awards(players_data)
+            print(f"Calculated {len(awards)} awards")
             
             # Extract tournament info from players_data if available
             tournament_info = players_data.get('tournament_info', {})
@@ -81,14 +84,17 @@ class PokerAwardsParser:
             }
         except Exception as e:
             print(f"Error parsing text file: {e}")
+            import traceback
+            traceback.print_exc()
             return self._generate_sample_data()
     
     def _extract_from_txt(self, content: bytes):
         """Extract player data from PokerStars text file"""
         # Convert bytes to text
         text = content.decode('utf-8')
-        print(f"File content length: {len(text)}")
-        print(f"First 500 characters: {text[:500]}")
+        print(f"File content length: {len(text)} characters")
+        print(f"First 200 characters: {text[:200]}")
+        
         # Initialize data structures
         players = {}
         tournament_info = {}
@@ -97,17 +103,33 @@ class PokerAwardsParser:
         tournament_match = re.search(r'Tournament #(\d+)', text)
         if tournament_match:
             tournament_info['id'] = tournament_match.group(1)
+            print(f"Found tournament ID: {tournament_info['id']}")
+        else:
+            print("No tournament ID found")
         
         date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', text)
         if date_match:
             tournament_info['date'] = date_match.group(1)
+            print(f"Found tournament date: {tournament_info['date']}")
         
-        # Extract all hands
-        hands = re.findall(r'\*{11} # \d+ \*{14}(.*?)(?=\*{11} # \d+ \*{14}|\Z)', text, re.DOTALL)
+        # FIXED REGEX - Extract all hands using PokerStars format
+        hands = re.findall(r'(PokerStars Hand #\d+: Tournament #\d+.*?)(?=PokerStars Hand #\d+: Tournament #\d+|\Z)', text, re.DOTALL)
         print(f"Found {len(hands)} hands")
-        print(f"Tournament ID found: {tournament_info.get('id', 'None')}")
         
-        for hand_text in hands:
+        if len(hands) > 0:
+            print(f"First hand preview: {hands[0][:150]}...")
+        else:
+            print("WARNING: No hands found! File may not be in PokerStars tournament format")
+            print("Looking for pattern starting with 'PokerStars Hand #'")
+            # Try to find any PokerStars Hand mentions
+            hand_mentions = re.findall(r'PokerStars Hand #\d+', text)
+            print(f"Found {len(hand_mentions)} PokerStars Hand mentions")
+            if hand_mentions:
+                print(f"Example: {hand_mentions[0]}")
+        
+        for i, hand_text in enumerate(hands):
+            if i < 3:  # Debug first few hands
+                print(f"Processing hand {i+1}")
             self._parse_hand(hand_text, players)
         
         # Calculate final positions from chip counts and eliminations
@@ -115,6 +137,7 @@ class PokerAwardsParser:
         
         # Count total unique players
         tournament_info['player_count'] = len(players)
+        print(f"Final player count: {tournament_info['player_count']}")
         
         # Store tournament info in the players dict for easy access
         players['tournament_info'] = tournament_info
@@ -211,8 +234,10 @@ class PokerAwardsParser:
         players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
         
         if not players:
+            print("No players found, returning sample awards")
             return self._get_sample_awards()
         
+        print(f"Calculating awards for {len(players)} players")
         awards = {}
         
         # Tournament Champion (1st place)
@@ -420,25 +445,36 @@ async def upload_page(request: Request):
 @app.post(f"/upload/{SECRET_UPLOAD_PATH}/process")
 async def process_upload(file: UploadFile = File(...)):
     """Process the uploaded TXT file"""
+    print(f"Received file upload: {file.filename}")
+    print(f"File content type: {file.content_type}")
+    
     if not file.filename.endswith('.txt'):
+        print(f"Rejected file: not a .txt file")
         raise HTTPException(400, "Please upload a TXT file")
     
     try:
         # Read TXT content
         content = await file.read()
+        print(f"Read {len(content)} bytes from uploaded file")
         
         # Parse and calculate awards
         results = parser.parse_txt(content)
+        print(f"Parsing complete. Results: {results}")
         
         # Save results
         save_results(results)
+        print("Results saved successfully")
         
         # Broadcast to all connected clients
         await sse_manager.broadcast_update(results)
+        print("Broadcast update sent")
         
         return {"success": True, "message": "Awards updated successfully!", "results": results}
     
     except Exception as e:
+        print(f"Error in process_upload: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(500, f"Error processing file: {str(e)}")
 
 @app.get("/events")
