@@ -167,11 +167,17 @@ class PokerAwardsParser:
                     'passive_actions': 0,
                     'hands_voluntarily_played': 0,
                     'final_position': None,
-                    'max_chips': int(chips)
+                    'max_chips': int(chips),
+                    'bad_beats': [],  # Store specific bad beat hands
+                    'suckouts': []    # Store when they got lucky
                 }
             
             players[player_name]['hands_played'] += 1
             players[player_name]['max_chips'] = max(players[player_name]['max_chips'], int(chips))
+        
+        # Analyze showdowns for bad beats
+        if '*** SHOW DOWN ***' in hand_text:
+            self._analyze_showdown_for_bad_beats(hand_text, players)
         
         # Count actions for each player
         action_patterns = {
@@ -218,6 +224,89 @@ class PokerAwardsParser:
             if player in players:
                 players[player]['total_won'] += int(amount)
     
+    def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
+        """Analyze showdown hands to detect bad beats"""
+        # Extract showdown information
+        showdown_section = hand_text.split('*** SHOW DOWN ***')[1] if '*** SHOW DOWN ***' in hand_text else ""
+        
+        # Pattern to match player showdowns with hands
+        showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
+        showdown_matches = re.findall(showdown_pattern, showdown_section)
+        
+        if len(showdown_matches) >= 2:
+            # Find winner
+            winner_pattern = r'(\w+(?:\*\d+)?) collected \d+ from pot'
+            winner_match = re.search(winner_pattern, hand_text)
+            winner = winner_match.group(1) if winner_match else None
+            
+            # Analyze each showdown hand
+            hand_strengths = []
+            for player, cards, hand_desc in showdown_matches:
+                strength = self._evaluate_hand_strength(hand_desc)
+                hand_strengths.append({
+                    'player': player,
+                    'cards': cards,
+                    'description': hand_desc,
+                    'strength': strength,
+                    'won': player == winner
+                })
+            
+            # Sort by hand strength (higher is better)
+            hand_strengths.sort(key=lambda x: x['strength'], reverse=True)
+            
+            # Check for bad beats (weaker hand beats stronger hand)
+            if len(hand_strengths) >= 2 and winner:
+                winner_strength = next((h['strength'] for h in hand_strengths if h['player'] == winner), 0)
+                
+                for hand_info in hand_strengths:
+                    if hand_info['player'] != winner and hand_info['strength'] > winner_strength:
+                        # This is a bad beat victim
+                        bad_beat_info = {
+                            'victim_hand': f"{hand_info['cards']} ({hand_info['description']})",
+                            'winner_hand': f"{next(h['cards'] for h in hand_strengths if h['player'] == winner)} ({next(h['description'] for h in hand_strengths if h['player'] == winner)})",
+                            'winner': winner,
+                            'description': f"Lost with {hand_info['description']} to {next(h['description'] for h in hand_strengths if h['player'] == winner)}"
+                        }
+                        
+                        if hand_info['player'] in players:
+                            players[hand_info['player']]['bad_beats'].append(bad_beat_info)
+                        
+                        # Track suckout for winner
+                        if winner in players:
+                            suckout_info = {
+                                'winning_hand': f"{next(h['cards'] for h in hand_strengths if h['player'] == winner)} ({next(h['description'] for h in hand_strengths if h['player'] == winner)})",
+                                'victim': hand_info['player'],
+                                'victim_hand': f"{hand_info['cards']} ({hand_info['description']})",
+                                'description': f"Sucked out with {next(h['description'] for h in hand_strengths if h['player'] == winner)} against {hand_info['description']}"
+                            }
+                            players[winner]['suckouts'].append(suckout_info)
+    
+    def _evaluate_hand_strength(self, hand_description: str) -> int:
+        """Evaluate poker hand strength for bad beat detection"""
+        hand_desc = hand_description.lower()
+        
+        # Hand rankings (higher number = stronger hand)
+        if 'royal flush' in hand_desc:
+            return 10
+        elif 'straight flush' in hand_desc:
+            return 9
+        elif 'four of a kind' in hand_desc or 'quads' in hand_desc:
+            return 8
+        elif 'full house' in hand_desc:
+            return 7
+        elif 'flush' in hand_desc:
+            return 6
+        elif 'straight' in hand_desc:
+            return 5
+        elif 'three of a kind' in hand_desc or 'trips' in hand_desc:
+            return 4
+        elif 'two pair' in hand_desc:
+            return 3
+        elif 'pair' in hand_desc:
+            return 2
+        else:
+            return 1  # High card
+    
     def _determine_final_positions(self, players: Dict, full_text: str):
         """Determine final tournament positions"""
         # Use chip counts as a proxy for positions
@@ -258,6 +347,33 @@ class PokerAwardsParser:
                 "stat": "Heads-up warrior"
             }
         
+        # Preparation H Club (Bad Beat Victims)
+        bad_beat_victims = [(name, data) for name, data in players.items() if data.get('bad_beats')]
+        if bad_beat_victims:
+            # Find the worst bad beat victim
+            worst_victim = max(bad_beat_victims, key=lambda x: len(x[1]['bad_beats']))
+            worst_beat = worst_victim[1]['bad_beats'][0] if worst_victim[1]['bad_beats'] else None
+            
+            awards["🩹 Preparation H Club"] = {
+                "winner": worst_victim[0],
+                "description": "Suffered the most painful bad beats of the night",
+                "stat": f"Lost with {worst_beat['victim_hand']} to {worst_beat['winner_hand']}" if worst_beat else "Multiple bad beats endured",
+                "details": [beat['description'] for beat in worst_victim[1]['bad_beats'][:3]]  # Show up to 3 bad beats
+            }
+        
+        # Luckiest Player (Most Suckouts)
+        suckout_players = [(name, data) for name, data in players.items() if data.get('suckouts')]
+        if suckout_players:
+            luckiest = max(suckout_players, key=lambda x: len(x[1]['suckouts']))
+            best_suckout = luckiest[1]['suckouts'][0] if luckiest[1]['suckouts'] else None
+            
+            awards["🍀 Luckiest (Suckout King)"] = {
+                "winner": luckiest[0],
+                "description": "Got incredibly lucky when it mattered most",
+                "stat": f"Won with {best_suckout['winning_hand']} against {best_suckout['victim_hand']}" if best_suckout else "Multiple suckouts delivered",
+                "details": [suckout['description'] for suckout in luckiest[1]['suckouts'][:3]]
+            }
+        
         # Most Aggressive (highest aggression ratio)
         aggressive_players = [(name, data) for name, data in players.items() 
                             if data['hands_played'] > 5]
@@ -278,18 +394,6 @@ class PokerAwardsParser:
                 "winner": calling_station[0],
                 "description": "Never saw a bet they didn't want to call",
                 "stat": "The human slot machine"
-            }
-        
-        # Luckiest Player
-        showdown_players = [(name, data) for name, data in players.items() 
-                          if data.get('showdowns', 0) >= 2]
-        if showdown_players:
-            luckiest = max(showdown_players,
-                         key=lambda x: x[1]['showdown_wins'] / max(x[1]['showdowns'], 1))
-            awards["🍀 Luckiest"] = {
-                "winner": luckiest[0],
-                "description": "Turned trash into treasure at showdown",
-                "stat": "The poker gods were smiling"
             }
         
         # Tightest Player (Rock Award)
@@ -335,17 +439,6 @@ class PokerAwardsParser:
                 "stat": "Master of the poker face"
             }
         
-        # Bad Beat Victim (unlucky at showdown)
-        if showdown_players:
-            bad_beat_victim = min(showdown_players,
-                                key=lambda x: x[1]['showdown_wins'] / max(x[1]['showdowns'], 1))
-            win_rate = (bad_beat_victim[1]['showdown_wins'] / bad_beat_victim[1]['showdowns']) * 100
-            awards["💔 Bad Beat Victim"] = {
-                "winner": bad_beat_victim[0],
-                "description": "The poker gods showed no mercy tonight",
-                "stat": f"{win_rate:.0f}% showdown win rate"
-            }
-        
         # Bubble Boy (if enough players)
         if len(players) >= 4:
             bubble_position = (len(players) + 1) // 2
@@ -368,23 +461,25 @@ class PokerAwardsParser:
                 "description": "Survived the chaos and claimed the crown", 
                 "stat": "Outlasted 5 other players"
             },
+            "🩹 Preparation H Club": {
+                "winner": "Sick Nickel",
+                "description": "Suffered the most painful bad beats of the night",
+                "stat": "Lost with AK suited to 72 offsuit",
+                "details": ["Lost with pocket aces to a rivered two pair", "Flopped a set, lost to runner-runner flush"]
+            },
             "🔥 Most Aggressive": {
                 "winner": "Fuzzy Nips", 
                 "description": "Fearless bets and raises kept everyone on edge", 
                 "stat": "Never met a pot they didn't want to steal"
             },
-            "🍀 Luckiest": {
-                "winner": "Sick Nickel", 
-                "description": "Turned trash into treasure at showdown", 
-                "stat": "The poker gods were smiling"
-            },
-            "🧊 Tightest (Rock Award)": {
-                "winner": "Esk", 
-                "description": "Waited patiently for the premiums", 
-                "stat": "Classic rock-solid play"
+            "🍀 Luckiest (Suckout King)": {
+                "winner": "Kentie Boy", 
+                "description": "Got incredibly lucky when it mattered most", 
+                "stat": "Won with 72 offsuit against pocket aces",
+                "details": ["Rivered a straight with 54 against top pair", "Hit a two-outer on the turn for the win"]
             },
             "📞 Calling Station": {
-                "winner": "Kentie Boy", 
+                "winner": "Esk", 
                 "description": "Never saw a bet they didn't want to call", 
                 "stat": "The human slot machine"
             },
