@@ -64,12 +64,12 @@ sse_manager = SSEManager()
 
 # Awards calculation logic
 class PokerAwardsParser:
-    def parse_pdf(self, pdf_content: bytes) -> Dict[str, Any]:
-        """Parse poker PDF and calculate awards"""
+    def parse_txt(self, pdf_content: bytes) -> Dict[str, Any]:
+        """Parse poker TXT and calculate awards"""
         try:
             if PDF_AVAILABLE:
                 # Real PDF parsing logic here
-                players_data = self._extract_from_pdf(pdf_content)
+                players_data = self._extract_from_txt(txt_content)
             else:
                 # Fallback to sample data for demo
                 players_data = self._generate_sample_players()
@@ -90,47 +90,41 @@ class PokerAwardsParser:
             print(f"Error parsing PDF: {e}")
             return self._generate_sample_data()
     
-    def _extract_from_pdf(self, pdf_content: bytes):
-        """Extract player data from actual PokerStars PDF"""
-        import re
-        from io import BytesIO
-        
-        with pdfplumber.open(BytesIO(pdf_content)) as pdf:
-            full_text = ""
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    full_text += text + "\n"
-        
-        # Initialize data structures
-        players = {}
-        tournament_info = {}
-        
-        # Extract tournament information
-        tournament_match = re.search(r'Tournament #(\d+)', full_text)
-        if tournament_match:
-            tournament_info['id'] = tournament_match.group(1)
-        
-        date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', full_text)
-        if date_match:
-            tournament_info['date'] = date_match.group(1)
-        
-        # Extract all hands
-        hands = re.findall(r'\*{11} # \d+ \*{14}(.*?)(?=\*{11} # \d+ \*{14}|\Z)', full_text, re.DOTALL)
-        
-        for hand_text in hands:
-            self._parse_hand(hand_text, players)
-        
-        # Calculate final positions from chip counts and eliminations
-        self._determine_final_positions(players, full_text)
-        
-        # Count total unique players
-        tournament_info['player_count'] = len(players)
-        
-        # Store tournament info in the players dict for easy access
-        players['tournament_info'] = tournament_info
-        
-        return players
+    def _extract_from_txt(self, content: bytes):
+    """Extract player data from PokerStars text file"""
+    
+    # Convert bytes to text
+    text = content.decode('utf-8')
+    
+    # Initialize data structures
+    players = {}
+    tournament_info = {}
+    
+    # Extract tournament information
+    tournament_match = re.search(r'Tournament #(\d+)', text)
+    if tournament_match:
+        tournament_info['id'] = tournament_match.group(1)
+    
+    date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', text)
+    if date_match:
+        tournament_info['date'] = date_match.group(1)
+    
+    # Extract all hands
+    hands = re.findall(r'\*{11} # \d+ \*{14}(.*?)(?=\*{11} # \d+ \*{14}|\Z)', text, re.DOTALL)
+    
+    for hand_text in hands:
+        self._parse_hand(hand_text, players)
+    
+    # Calculate final positions from chip counts and eliminations
+    self._determine_final_positions(players, text)
+    
+    # Count total unique players
+    tournament_info['player_count'] = len(players)
+    
+    # Store tournament info in the players dict for easy access
+    players['tournament_info'] = tournament_info
+    
+    return players
     
     def _parse_hand(self, hand_text: str, players: Dict):
         """Parse individual hand and update player statistics"""
@@ -554,7 +548,7 @@ async def upload_page(request: Request):
 @app.post(f"/upload/{SECRET_UPLOAD_PATH}/process")
 async def process_upload(file: UploadFile = File(...)):
     """Process the uploaded PDF"""
-    if not file.filename.endswith('.pdf'):
+    if not file.filename.endswith('.txr'):
         raise HTTPException(400, "Please upload a PDF file")
     
     try:
