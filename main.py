@@ -225,87 +225,162 @@ class PokerAwardsParser:
                 players[player]['total_won'] += int(amount)
     
     def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
-        """Analyze showdown hands to detect bad beats"""
+        """Analyze showdown hands to detect bad beats - when statistically favored hands lose"""
+        # Extract board cards and showdown info
+        board_match = re.search(r'Board \[([^\]]+)\]', hand_text)
+        if not board_match:
+            return
+        
+        board_cards = board_match.group(1).split()
+        
+        # Extract flop, turn, river progression
+        flop_match = re.search(r'\*\*\* FLOP \*\*\* \[([^\]]+)\]', hand_text)
+        turn_match = re.search(r'\*\*\* TURN \*\*\* \[([^\]]+)\] \[([^\]]+)\]', hand_text)
+        river_match = re.search(r'\*\*\* RIVER \*\*\* \[([^\]]+)\] \[([^\]]+)\]', hand_text)
+        
         # Extract showdown information
         showdown_section = hand_text.split('*** SHOW DOWN ***')[1] if '*** SHOW DOWN ***' in hand_text else ""
         
         # Pattern to match player showdowns with hands
-        showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
+        showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\) and (won|lost)'
         showdown_matches = re.findall(showdown_pattern, showdown_section)
         
         if len(showdown_matches) >= 2:
-            # Find winner
-            winner_pattern = r'(\w+(?:\*\d+)?) collected \d+ from pot'
-            winner_match = re.search(winner_pattern, hand_text)
-            winner = winner_match.group(1) if winner_match else None
+            # Find winner and analyze pre-flop hand strength
+            winner = None
+            loser = None
+            winner_info = None
+            loser_info = None
             
-            # Analyze each showdown hand
-            hand_strengths = []
-            for player, cards, hand_desc in showdown_matches:
-                strength = self._evaluate_hand_strength(hand_desc)
-                hand_strengths.append({
-                    'player': player,
-                    'cards': cards,
-                    'description': hand_desc,
-                    'strength': strength,
-                    'won': player == winner
-                })
+            for player, cards, hand_desc, result in showdown_matches:
+                if result == 'won':
+                    winner = player
+                    winner_info = {'player': player, 'cards': cards, 'description': hand_desc}
+                else:
+                    loser = player
+                    loser_info = {'player': player, 'cards': cards, 'description': hand_desc}
             
-            # Sort by hand strength (higher is better)
-            hand_strengths.sort(key=lambda x: x['strength'], reverse=True)
-            
-            # Check for bad beats (weaker hand beats stronger hand)
-            if len(hand_strengths) >= 2 and winner:
-                winner_strength = next((h['strength'] for h in hand_strengths if h['player'] == winner), 0)
+            if winner and loser and winner_info and loser_info:
+                # Evaluate pre-flop hand strength
+                winner_preflop_strength = self._evaluate_preflop_strength(winner_info['cards'])
+                loser_preflop_strength = self._evaluate_preflop_strength(loser_info['cards'])
                 
-                for hand_info in hand_strengths:
-                    if hand_info['player'] != winner and hand_info['strength'] > winner_strength:
-                        # This is a bad beat victim
-                        bad_beat_info = {
-                            'victim_hand': f"{hand_info['cards']} ({hand_info['description']})",
-                            'winner_hand': f"{next(h['cards'] for h in hand_strengths if h['player'] == winner)} ({next(h['description'] for h in hand_strengths if h['player'] == winner)})",
-                            'winner': winner,
-                            'description': f"Lost with {hand_info['description']} to {next(h['description'] for h in hand_strengths if h['player'] == winner)}"
+                # Check if this was a bad beat (stronger pre-flop hand lost)
+                if loser_preflop_strength > winner_preflop_strength:
+                    # Determine if it was a turn or river bad beat
+                    bad_beat_street = "river"
+                    if turn_match and river_match:
+                        turn_card = river_match.group(2)
+                        if self._hand_improved_on_street(winner_info['cards'], board_cards, turn_card):
+                            bad_beat_street = "turn"
+                    
+                    bad_beat_info = {
+                        'victim_hand': f"{loser_info['cards']} ({loser_info['description']})",
+                        'winner_hand': f"{winner_info['cards']} ({winner_info['description']})",
+                        'winner': winner,
+                        'bad_beat_street': bad_beat_street,
+                        'description': f"Lost {loser_info['description']} to {winner_info['description']} on the {bad_beat_street}",
+                        'preflop_favorite': True
+                    }
+                    
+                    if loser in players:
+                        players[loser]['bad_beats'].append(bad_beat_info)
+                    
+                    # Track suckout for winner
+                    if winner in players:
+                        suckout_info = {
+                            'winning_hand': f"{winner_info['cards']} ({winner_info['description']})",
+                            'victim': loser,
+                            'victim_hand': f"{loser_info['cards']} ({loser_info['description']})",
+                            'suckout_street': bad_beat_street,
+                            'description': f"Sucked out on the {bad_beat_street} with {winner_info['description']} vs {loser_info['description']}"
                         }
-                        
-                        if hand_info['player'] in players:
-                            players[hand_info['player']]['bad_beats'].append(bad_beat_info)
-                        
-                        # Track suckout for winner
-                        if winner in players:
-                            suckout_info = {
-                                'winning_hand': f"{next(h['cards'] for h in hand_strengths if h['player'] == winner)} ({next(h['description'] for h in hand_strengths if h['player'] == winner)})",
-                                'victim': hand_info['player'],
-                                'victim_hand': f"{hand_info['cards']} ({hand_info['description']})",
-                                'description': f"Sucked out with {next(h['description'] for h in hand_strengths if h['player'] == winner)} against {hand_info['description']}"
-                            }
-                            players[winner]['suckouts'].append(suckout_info)
+                        players[winner]['suckouts'].append(suckout_info)
     
-    def _evaluate_hand_strength(self, hand_description: str) -> int:
-        """Evaluate poker hand strength for bad beat detection"""
-        hand_desc = hand_description.lower()
+    def _evaluate_preflop_strength(self, hole_cards: str) -> int:
+        """Evaluate pre-flop hand strength for bad beat detection"""
+        cards = hole_cards.strip().split()
+        if len(cards) != 2:
+            return 0
         
-        # Hand rankings (higher number = stronger hand)
-        if 'royal flush' in hand_desc:
-            return 10
-        elif 'straight flush' in hand_desc:
-            return 9
-        elif 'four of a kind' in hand_desc or 'quads' in hand_desc:
-            return 8
-        elif 'full house' in hand_desc:
-            return 7
-        elif 'flush' in hand_desc:
-            return 6
-        elif 'straight' in hand_desc:
-            return 5
-        elif 'three of a kind' in hand_desc or 'trips' in hand_desc:
-            return 4
-        elif 'two pair' in hand_desc:
-            return 3
-        elif 'pair' in hand_desc:
-            return 2
-        else:
-            return 1  # High card
+        # Parse cards
+        card1_rank = cards[0][0]
+        card1_suit = cards[0][1]
+        card2_rank = cards[1][0]
+        card2_suit = cards[1][1]
+        
+        # Convert face cards to numbers for easier comparison
+        rank_values = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, 
+                      '9': 9, 'T': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14}
+        
+        val1 = rank_values.get(card1_rank, 0)
+        val2 = rank_values.get(card2_rank, 0)
+        
+        is_suited = card1_suit == card2_suit
+        is_pair = val1 == val2
+        
+        # Premium hands (very strong pre-flop)
+        if is_pair:
+            if val1 >= 13:  # AA, KK
+                return 100
+            elif val1 >= 11:  # QQ, JJ
+                return 90
+            elif val1 >= 9:   # TT, 99
+                return 80
+            elif val1 >= 7:   # 88, 77
+                return 70
+            else:  # 66 and below
+                return 60
+        
+        # Non-pair hands
+        high_card = max(val1, val2)
+        low_card = min(val1, val2)
+        
+        # AK, AQ type hands
+        if high_card == 14:  # Ace
+            if low_card >= 13:  # AK
+                return 85 if is_suited else 80
+            elif low_card >= 12:  # AQ
+                return 75 if is_suited else 70
+            elif low_card >= 11:  # AJ
+                return 65 if is_suited else 60
+            elif low_card >= 10:  # AT
+                return 55 if is_suited else 50
+            else:
+                return 40 if is_suited else 30
+        
+        # King high hands
+        elif high_card == 13:  # King
+            if low_card >= 12:  # KQ
+                return 65 if is_suited else 60
+            elif low_card >= 11:  # KJ
+                return 55 if is_suited else 50
+            else:
+                return 35 if is_suited else 25
+        
+        # Connected cards and suited connectors
+        elif abs(val1 - val2) == 1:  # Connected
+            return 45 if is_suited else 35
+        elif abs(val1 - val2) == 2:  # One gap
+            return 35 if is_suited else 25
+        
+        # Everything else
+        return 20 if is_suited else 10
+    
+    def _hand_improved_on_street(self, hole_cards: str, board_cards: list, street_card: str) -> bool:
+        """Check if a hand significantly improved on a specific street"""
+        # This is a simplified check - in a full implementation you'd need
+        # complete hand evaluation logic
+        cards = hole_cards.strip().split()
+        
+        # Check if the street card matches hole cards (pair improvement)
+        street_rank = street_card[0] if street_card else ''
+        for card in cards:
+            if card[0] == street_rank:
+                return True
+        
+        # Additional checks for straights, flushes could be added here
+        return False
     
     def _determine_final_positions(self, players: Dict, full_text: str):
         """Determine final tournament positions"""
@@ -350,14 +425,14 @@ class PokerAwardsParser:
         # Preparation H Club (Bad Beat Victims)
         bad_beat_victims = [(name, data) for name, data in players.items() if data.get('bad_beats')]
         if bad_beat_victims:
-            # Find the worst bad beat victim
+            # Find the worst bad beat victim (most bad beats or worst individual beat)
             worst_victim = max(bad_beat_victims, key=lambda x: len(x[1]['bad_beats']))
             worst_beat = worst_victim[1]['bad_beats'][0] if worst_victim[1]['bad_beats'] else None
             
             awards["🩹 Preparation H Club"] = {
                 "winner": worst_victim[0],
-                "description": "Suffered the most painful bad beats of the night",
-                "stat": f"Lost with {worst_beat['victim_hand']} to {worst_beat['winner_hand']}" if worst_beat else "Multiple bad beats endured",
+                "description": "Got unlucky when they were statistically favored to win",
+                "stat": f"Had {worst_beat['victim_hand']} beaten by {worst_beat['winner_hand']} on the {worst_beat['bad_beat_street']}" if worst_beat else f"Suffered {len(worst_victim[1]['bad_beats'])} bad beats",
                 "details": [beat['description'] for beat in worst_victim[1]['bad_beats'][:3]]  # Show up to 3 bad beats
             }
         
@@ -463,9 +538,9 @@ class PokerAwardsParser:
             },
             "🩹 Preparation H Club": {
                 "winner": "Sick Nickel",
-                "description": "Suffered the most painful bad beats of the night",
-                "stat": "Lost with AK suited to 72 offsuit",
-                "details": ["Lost with pocket aces to a rivered two pair", "Flopped a set, lost to runner-runner flush"]
+                "description": "Got unlucky when they were statistically favored to win",
+                "stat": "Had pocket aces cracked by 7-2 offsuit on the river",
+                "details": ["Lost AA vs 72o when villain hit two pair", "Had KK beaten by A3 when ace hit the turn", "Flopped a set, lost to runner-runner flush"]
             },
             "🔥 Most Aggressive": {
                 "winner": "Fuzzy Nips", 
@@ -475,8 +550,8 @@ class PokerAwardsParser:
             "🍀 Luckiest (Suckout King)": {
                 "winner": "Kentie Boy", 
                 "description": "Got incredibly lucky when it mattered most", 
-                "stat": "Won with 72 offsuit against pocket aces",
-                "details": ["Rivered a straight with 54 against top pair", "Hit a two-outer on the turn for the win"]
+                "stat": "Won with 72 offsuit against pocket aces on the river",
+                "details": ["Rivered two pair with 72o vs AA", "Hit a 2-outer on the turn for the win", "Sucked out with gutshot straight on river"]
             },
             "📞 Calling Station": {
                 "winner": "Esk", 
