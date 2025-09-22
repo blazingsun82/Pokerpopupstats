@@ -116,6 +116,13 @@ class PokerAwardsParser:
         hands = re.findall(r'(PokerStars Hand #\d+: Tournament #\d+.*?)(?=PokerStars Hand #\d+: Tournament #\d+|\Z)', text, re.DOTALL)
         print(f"Found {len(hands)} hands")
         
+        # Debug: Check how many hands have showdowns
+        showdown_count = 0
+        for hand in hands:
+            if '*** SHOW DOWN ***' in hand:
+                showdown_count += 1
+        print(f"DEBUG: Found {showdown_count} hands with showdowns out of {len(hands)} total hands")
+        
         if len(hands) > 0:
             print(f"First hand preview: {hands[0][:150]}...")
         else:
@@ -130,6 +137,11 @@ class PokerAwardsParser:
         for i, hand_text in enumerate(hands):
             if i < 3:  # Debug first few hands
                 print(f"Processing hand {i+1}")
+                # Check if this hand has a showdown
+                if '*** SHOW DOWN ***' in hand_text:
+                    print(f"DEBUG: Hand {i+1} contains a showdown")
+                else:
+                    print(f"DEBUG: Hand {i+1} has no showdown")
             self._parse_hand(hand_text, players)
         
         # Calculate final positions from chip counts and eliminations
