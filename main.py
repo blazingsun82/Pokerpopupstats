@@ -36,6 +36,31 @@ if Path("static").exists():
 SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "bingo-poker-secret-2025")
 RESULTS_FILE = Path("results.json")
 
+# Add environment variable to store results as backup
+def save_to_env_backup(data):
+    """Save critical data to environment variable as backup"""
+    try:
+        # Store key data in environment variable for persistence
+        backup_data = {
+            "tournament_date": data.get("tournament_date"),
+            "tournament_id": data.get("tournament_id"),
+            "awards": data.get("awards", {}),
+            "preparation_h_club": data.get("preparation_h_club", [])
+        }
+        os.environ["POKER_RESULTS_BACKUP"] = json.dumps(backup_data)
+    except Exception as e:
+        print(f"Failed to save backup: {e}")
+
+def load_from_env_backup():
+    """Load results from environment variable backup"""
+    try:
+        backup_str = os.environ.get("POKER_RESULTS_BACKUP")
+        if backup_str:
+            return json.loads(backup_str)
+    except Exception as e:
+        print(f"Failed to load backup: {e}")
+    return None
+
 # SSE connection management
 class SSEManager:
     def __init__(self):
@@ -75,18 +100,45 @@ class PokerAwardsParser:
             # Extract tournament info from players_data if available
             tournament_info = players_data.get('tournament_info', {})
             
-            return {
+            # Extract bad beat victims for separate section
+            preparation_h_club = self._extract_preparation_h_club(players_data)
+            
+            result = {
                 "tournament_date": tournament_info.get('date', datetime.now().strftime("%B %d, %Y at %I:%M %p")),
                 "tournament_id": tournament_info.get('id', 'Unknown'),
                 "total_players": tournament_info.get('player_count', len([p for p in players_data if p != 'tournament_info'])),
                 "awards": awards,
+                "preparation_h_club": preparation_h_club,
                 "last_updated": datetime.now().isoformat()
             }
+            
+            return result
         except Exception as e:
             print(f"Error parsing text file: {e}")
             import traceback
             traceback.print_exc()
             return self._generate_sample_data()
+    
+    def _extract_preparation_h_club(self, players_data: Dict[str, Dict]) -> List[Dict]:
+        """Extract bad beat victims for the Preparation H Club section"""
+        preparation_h_club = []
+        
+        # Filter out tournament_info
+        players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
+        
+        for player_name, player_data in players.items():
+            bad_beats = player_data.get('bad_beats', [])
+            for bad_beat in bad_beats:
+                preparation_h_club.append({
+                    'victim': player_name,
+                    'victim_hand': bad_beat['victim_hand'],
+                    'winner': bad_beat['winner'],
+                    'winner_hand': bad_beat['winner_hand'],
+                    'description': bad_beat['description']
+                })
+        
+        print(f"DEBUG: Created Preparation H Club with {len(preparation_h_club)} bad beats")
+        return preparation_h_club
     
     def _extract_from_txt(self, content: bytes):
         """Extract player data from PokerStars text file"""
@@ -412,21 +464,6 @@ class PokerAwardsParser:
         # Everything else
         return 20 if is_suited else 10
     
-    def _hand_improved_on_street(self, hole_cards: str, board_cards: list, street_card: str) -> bool:
-        """Check if a hand significantly improved on a specific street"""
-        # This is a simplified check - in a full implementation you'd need
-        # complete hand evaluation logic
-        cards = hole_cards.strip().split()
-        
-        # Check if the street card matches hole cards (pair improvement)
-        street_rank = street_card[0] if street_card else ''
-        for card in cards:
-            if card[0] == street_rank:
-                return True
-        
-        # Additional checks for straights, flushes could be added here
-        return False
-    
     def _determine_final_positions(self, players: Dict, full_text: str):
         """Determine final tournament positions"""
         # Use chip counts as a proxy for positions
@@ -467,26 +504,7 @@ class PokerAwardsParser:
                 "stat": "Heads-up warrior"
             }
         
-        # Preparation H Club (Bad Beat Victims)
-        bad_beat_victims = [(name, data) for name, data in players.items() if data.get('bad_beats')]
-        print(f"DEBUG: Found {len(bad_beat_victims)} players with bad beats")
-        for name, data in bad_beat_victims:
-            print(f"DEBUG: {name} has {len(data['bad_beats'])} bad beats")
-        
-        if bad_beat_victims:
-            # Find the worst bad beat victim (most bad beats or worst individual beat)
-            worst_victim = max(bad_beat_victims, key=lambda x: len(x[1]['bad_beats']))
-            worst_beat = worst_victim[1]['bad_beats'][0] if worst_victim[1]['bad_beats'] else None
-            
-            awards["🩹 Preparation H Club"] = {
-                "winner": worst_victim[0],
-                "description": "Got unlucky when they were statistically favored to win",
-                "stat": f"Had {worst_beat['victim_hand']} beaten by {worst_beat['winner_hand']} on the {worst_beat['bad_beat_street']}" if worst_beat else f"Suffered {len(worst_victim[1]['bad_beats'])} bad beats",
-                "details": [beat['description'] for beat in worst_victim[1]['bad_beats'][:3]]  # Show up to 3 bad beats
-            }
-            print(f"DEBUG: Created Preparation H Club award for {worst_victim[0]}")
-        else:
-            print("DEBUG: No bad beats found, skipping Preparation H Club award")
+        # NOTE: Removed Preparation H Club badge from here - it's now handled separately
         
         # Luckiest Player (Most Suckouts)
         suckout_players = [(name, data) for name, data in players.items() if data.get('suckouts')]
@@ -588,12 +606,6 @@ class PokerAwardsParser:
                 "description": "Survived the chaos and claimed the crown", 
                 "stat": "Outlasted 5 other players"
             },
-            "🩹 Preparation H Club": {
-                "winner": "Sick Nickel",
-                "description": "Got unlucky when they were statistically favored to win",
-                "stat": "Had pocket aces cracked by 7-2 offsuit on the river",
-                "details": ["Lost AA vs 72o when villain hit two pair", "Had KK beaten by A3 when ace hit the turn", "Flopped a set, lost to runner-runner flush"]
-            },
             "🔥 Most Aggressive": {
                 "winner": "Fuzzy Nips", 
                 "description": "Fearless bets and raises kept everyone on edge", 
@@ -602,8 +614,8 @@ class PokerAwardsParser:
             "🍀 Luckiest (Suckout King)": {
                 "winner": "Kentie Boy", 
                 "description": "Got incredibly lucky when it mattered most", 
-                "stat": "Won with 72 offsuit against pocket aces on the river",
-                "details": ["Rivered two pair with 72o vs AA", "Hit a 2-outer on the turn for the win", "Sucked out with gutshot straight on river"]
+                "stat": "Won with 72 offsuit against pocket aces",
+                "details": ["Rivered a straight with 54 against top pair", "Hit a two-outer on the turn for the win"]
             },
             "📞 Calling Station": {
                 "winner": "Esk", 
@@ -618,30 +630,81 @@ class PokerAwardsParser:
         }
     
     def _generate_sample_data(self):
-        """Fallback sample data"""
+        """Fallback sample data with separate preparation H club"""
         return {
             "tournament_date": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "tournament_id": "3928736979",
             "total_players": 6,
             "awards": self._get_sample_awards(),
+            "preparation_h_club": [
+                {
+                    'victim': 'Kentie Boy',
+                    'victim_hand': 'Qh Qc (a pair of Queens)',
+                    'winner': 'Blazingsun81',
+                    'winner_hand': 'Ad Kc (high card Ace)',
+                    'description': 'Lost pair of Queens to Ace high on the river'
+                },
+                {
+                    'victim': 'Fuzzy Nips',
+                    'victim_hand': 'As Ah (a pair of Aces)',
+                    'winner': 'Sick Nickel',
+                    'winner_hand': '7s 2d (two pair, Sevens and Deuces)',
+                    'description': 'Lost pocket aces to two pair on the river'
+                },
+                {
+                    'victim': 'Esk',
+                    'victim_hand': 'Ac Kd (high card Ace)',
+                    'winner': 'Trofimuk',
+                    'winner_hand': 'Jh Tc (a pair of Jacks)',
+                    'description': 'Lost AK to pocket jacks preflop'
+                }
+            ],
             "last_updated": datetime.now().isoformat()
         }
 
 parser = PokerAwardsParser()
 
-# Load existing results
+# Load existing results with backup system
 def load_results():
+    # First try to load from file
     if RESULTS_FILE.exists():
         try:
             with open(RESULTS_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            pass
+                data = json.load(f)
+                # Save to backup when successfully loaded
+                save_to_env_backup(data)
+                return data
+        except Exception as e:
+            print(f"Failed to load from file: {e}")
+    
+    # If file doesn't exist or failed, try backup
+    backup_data = load_from_env_backup()
+    if backup_data:
+        print("Loaded from environment backup")
+        # Reconstruct full data structure
+        return {
+            "tournament_date": backup_data.get("tournament_date", datetime.now().strftime("%B %d, %Y at %I:%M %p")),
+            "tournament_id": backup_data.get("tournament_id", "Unknown"),
+            "total_players": len(backup_data.get("awards", {})),
+            "awards": backup_data.get("awards", {}),
+            "preparation_h_club": backup_data.get("preparation_h_club", []),
+            "last_updated": datetime.now().isoformat()
+        }
+    
+    # If no backup, use sample data
+    print("No existing data found, using sample data")
     return parser._generate_sample_data()
 
 def save_results(data):
-    with open(RESULTS_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+    # Save to file
+    try:
+        with open(RESULTS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Failed to save to file: {e}")
+    
+    # Always save backup to environment
+    save_to_env_backup(data)
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -683,9 +746,9 @@ async def process_upload(file: UploadFile = File(...)):
         results = parser.parse_txt(content)
         print(f"Parsing complete. Results: {results}")
         
-        # Save results
+        # Save results with backup
         save_results(results)
-        print("Results saved successfully")
+        print("Results saved successfully (with backup)")
         
         # Broadcast to all connected clients
         await sse_manager.broadcast_update(results)
