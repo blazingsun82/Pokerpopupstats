@@ -504,7 +504,7 @@ class PokerAwardsParser:
                 "stat": "Heads-up warrior"
             }
         
-        # NOTE: Removed Preparation H Club badge from here - it's now handled separately
+        # REMOVED: Preparation H Club is now handled separately in the bottom section only
         
         # Luckiest Player (Most Suckouts)
         suckout_players = [(name, data) for name, data in players.items() if data.get('suckouts')]
