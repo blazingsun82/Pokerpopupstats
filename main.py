@@ -696,15 +696,17 @@ def load_results():
     return parser._generate_sample_data()
 
 def save_results(data):
+    # Always save backup to environment FIRST
+    save_to_env_backup(data)
+    
     # Save to file
     try:
         with open(RESULTS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
+        print("Successfully saved to both file and environment backup")
     except Exception as e:
         print(f"Failed to save to file: {e}")
-    
-    # Always save backup to environment
-    save_to_env_backup(data)
+        print("Data is still saved in environment backup")
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -745,6 +747,11 @@ async def process_upload(file: UploadFile = File(...)):
         # Parse and calculate awards
         results = parser.parse_txt(content)
         print(f"Parsing complete. Results: {results}")
+        
+        # Clear any old environment backup before saving new data
+        if "POKER_RESULTS_BACKUP" in os.environ:
+            del os.environ["POKER_RESULTS_BACKUP"]
+            print("Cleared old environment backup")
         
         # Save results with backup
         save_results(results)
