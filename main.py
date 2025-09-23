@@ -605,28 +605,28 @@ class PokerAwardsParser:
         """Return fun sample awards when no real data"""
         return {
             "🏆 Tournament Champion": {
-                "winner": "Blazingsun81", 
+                "winner": "Player1", 
                 "description": "Survived the chaos and claimed the crown", 
                 "stat": "Outlasted 5 other players"
             },
             "🔥 Most Aggressive": {
-                "winner": "Fuzzy Nips", 
+                "winner": "Player2", 
                 "description": "Fearless bets and raises kept everyone on edge", 
                 "stat": "Never met a pot they didn't want to steal"
             },
             "🍀 Luckiest (Suckout King)": {
-                "winner": "Kentie Boy", 
+                "winner": "Player3", 
                 "description": "Got incredibly lucky when it mattered most", 
                 "stat": "Won with 72 offsuit against pocket aces",
                 "details": ["Rivered a straight with 54 against top pair", "Hit a two-outer on the turn for the win"]
             },
             "📞 Calling Station": {
-                "winner": "Esk", 
+                "winner": "Player4", 
                 "description": "Never saw a bet they didn't want to call", 
                 "stat": "The human slot machine"
             },
             "🎭 Biggest Bluffer": {
-                "winner": "Trofimuk", 
+                "winner": "Player5", 
                 "description": "Firing barrels with air, keeping the table guessing", 
                 "stat": "Master of the poker face"
             }
