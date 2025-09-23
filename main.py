@@ -36,6 +36,9 @@ if Path("static").exists():
 SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "bingo-poker-secret-2025")
 RESULTS_FILE = Path("results.json")
 
+# Debug: Print the upload path
+print(f"Upload path configured as: /upload/{SECRET_UPLOAD_PATH}")
+
 # Add environment variable to store results as backup
 def save_to_env_backup(data):
     """Save critical data to environment variable as backup"""
@@ -636,29 +639,7 @@ class PokerAwardsParser:
             "tournament_id": "3928736979",
             "total_players": 6,
             "awards": self._get_sample_awards(),
-            "preparation_h_club": [
-                {
-                    'victim': 'Kentie Boy',
-                    'victim_hand': 'Qh Qc (a pair of Queens)',
-                    'winner': 'Blazingsun81',
-                    'winner_hand': 'Ad Kc (high card Ace)',
-                    'description': 'Lost pair of Queens to Ace high on the river'
-                },
-                {
-                    'victim': 'Fuzzy Nips',
-                    'victim_hand': 'As Ah (a pair of Aces)',
-                    'winner': 'Sick Nickel',
-                    'winner_hand': '7s 2d (two pair, Sevens and Deuces)',
-                    'description': 'Lost pocket aces to two pair on the river'
-                },
-                {
-                    'victim': 'Esk',
-                    'victim_hand': 'Ac Kd (high card Ace)',
-                    'winner': 'Trofimuk',
-                    'winner_hand': 'Jh Tc (a pair of Jacks)',
-                    'description': 'Lost AK to pocket jacks preflop'
-                }
-            ],
+            "preparation_h_club": [],  # Empty array - no hardcoded bad beats
             "last_updated": datetime.now().isoformat()
         }
 
