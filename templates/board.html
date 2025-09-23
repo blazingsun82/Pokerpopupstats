@@ -396,20 +396,19 @@
             </div>
         </div>
 
-        {% if results.total_players >= 4 %}
+        {% if results.preparation_h_club and results.preparation_h_club|length > 0 %}
         <div class="special-section">
             <h3>🩹 Preparation H Club</h3>
             <p style="margin-bottom: 20px; font-size: 1.1em;">
                 <em>"Had it on the flop... robbed on the river"</em>
             </p>
             <ul class="bad-beat-list">
-                <li>🔨 Kentie Boy (QQ) cracked by Blazingsun81 (AK)</li>
-                <li>💔 Esk (AK) rivered by Fuzzy Nips (AQ)</li>
-                <li>😱 Trofimuk (JJ) outdrawn by Sick Nickel (AT suited)</li>
+                {% for bad_beat in results.preparation_h_club %}
+                <li>💔 {{ bad_beat.victim }} lost {{ bad_beat.victim_hand }} to {{ bad_beat.winner }} with {{ bad_beat.winner_hand }}</li>
+                {% endfor %}
             </ul>
         </div>
         {% endif %}
-        </div>
 
         <div class="tournament-stats">
             <div class="stats-item">
@@ -515,6 +514,38 @@
             
             // Update timestamp
             lastUpdatedEl.textContent = data.tournament_date;
+            
+            // Update Preparation H Club section
+            updatePreparationHClub(data.preparation_h_club);
+        }
+
+        function updatePreparationHClub(preparationHClub) {
+            // Remove existing section
+            const existingSection = document.querySelector('.special-section');
+            if (existingSection) {
+                existingSection.remove();
+            }
+            
+            // Add new section if there are bad beats
+            if (preparationHClub && preparationHClub.length > 0) {
+                const sectionHTML = `
+                    <div class="special-section">
+                        <h3>🩹 Preparation H Club</h3>
+                        <p style="margin-bottom: 20px; font-size: 1.1em;">
+                            <em>"Had it on the flop... robbed on the river"</em>
+                        </p>
+                        <ul class="bad-beat-list">
+                            ${preparationHClub.map(badBeat => 
+                                `<li>💔 ${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+                
+                // Insert before tournament stats
+                const tournamentStats = document.querySelector('.tournament-stats');
+                tournamentStats.insertAdjacentHTML('beforebegin', sectionHTML);
+            }
         }
 
         function showUpdateNotification() {
