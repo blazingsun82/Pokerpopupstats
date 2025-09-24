@@ -293,7 +293,7 @@ class PokerAwardsParser:
                 players[player]['total_won'] += int(amount)
     
     def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
-        """Analyze showdown hands to detect bad beats - when statistically favored hands lose"""
+        """Analyze showdown hands to detect genuine bad beats - when strong made hands lose"""
         if '*** SHOW DOWN ***' not in hand_text:
             return
             
@@ -301,101 +301,195 @@ class PokerAwardsParser:
         showdown_section = hand_text.split('*** SHOW DOWN ***')[1]
         print(f"DEBUG: Found showdown section: {showdown_section[:200]}...")
         
-        # Find all players who showed hands (fixed pattern for PokerStars format)
+        # Find all players who showed hands
         showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
         showdown_matches = re.findall(showdown_pattern, showdown_section)
-        
-        # Also find players who mucked
-        muck_pattern = r'(\w+(?:\*\d+)?): mucks hand'
-        muck_matches = re.findall(muck_pattern, showdown_section)
         
         # Find who won the pot
         winner_pattern = r'(\w+(?:\*\d+)?) collected (\d+) from pot'
         winner_match = re.search(winner_pattern, hand_text)
         winner = winner_match.group(1) if winner_match else None
         
-        print(f"DEBUG: Showdown found - {len(showdown_matches)} players showed hands, {len(muck_matches)} mucked, winner: {winner}")
+        print(f"DEBUG: Showdown found - {len(showdown_matches)} players showed hands, winner: {winner}")
         
-        # For bad beat detection, we need at least one shown hand vs winner
-        if len(showdown_matches) >= 1 and winner:
-            # If someone mucked and someone else won, check if the shown hand was stronger preflop
+        # Only analyze hands where both players showed (for clear bad beat identification)
+        if len(showdown_matches) >= 2 and winner:
+            player_hands = []
             for player, cards, hand_desc in showdown_matches:
-                if player != winner:  # This player showed but lost
-                    preflop_strength = self._evaluate_preflop_strength(cards)
-                    print(f"DEBUG: {player} showed {cards} ({hand_desc}) - preflop strength: {preflop_strength}")
-                    
-                    # For mucked hands, we can't know the exact cards, but if someone 
-                    # showed a strong hand and lost, it's likely a bad beat
-                    if preflop_strength >= 70:  # Strong starting hands (pairs 88+, AK, AQ)
-                        print(f"DEBUG: POTENTIAL BAD BEAT! {player} showed strong hand but lost to {winner}")
-                        
-                        bad_beat_info = {
-                            'victim_hand': f"{cards} ({hand_desc})",
-                            'winner_hand': f"Unknown (mucked)",
-                            'winner': winner,
-                            'bad_beat_street': "unknown",
-                            'description': f"Lost {hand_desc} to {winner} (opponent mucked)",
-                            'preflop_favorite': True,
-                            'strength_diff': preflop_strength
-                        }
-                        
-                        if player in players:
-                            players[player]['bad_beats'].append(bad_beat_info)
-                            print(f"DEBUG: Added bad beat to {player}")
+                made_hand_strength = self._evaluate_made_hand_strength(hand_desc)
+                player_hands.append({
+                    'player': player,
+                    'cards': cards,
+                    'description': hand_desc,
+                    'made_hand_strength': made_hand_strength,
+                    'won': player == winner
+                })
+                print(f"DEBUG: {player} showed {cards} ({hand_desc}) - made hand strength: {made_hand_strength}")
             
-            # Handle case where both players showed hands
-            if len(showdown_matches) >= 2:
-                player_hands = []
-                for player, cards, hand_desc in showdown_matches:
-                    preflop_strength = self._evaluate_preflop_strength(cards)
-                    player_hands.append({
-                        'player': player,
-                        'cards': cards,
-                        'description': hand_desc,
-                        'preflop_strength': preflop_strength,
-                        'won': player == winner
-                    })
-                    print(f"DEBUG: {player} showed {cards} ({hand_desc}) - preflop strength: {preflop_strength}")
-                
-                # Find the strongest pre-flop hand that lost
-                losing_hands = [h for h in player_hands if not h['won']]
-                winning_hand = next((h for h in player_hands if h['won']), None)
-                
-                if losing_hands and winning_hand:
-                    strongest_loser = max(losing_hands, key=lambda x: x['preflop_strength'])
-                    
-                    # Check if the winner had a weaker pre-flop hand (bad beat)
-                    if strongest_loser['preflop_strength'] > winning_hand['preflop_strength']:
-                        print(f"DEBUG: BAD BEAT DETECTED! {strongest_loser['player']} ({strongest_loser['preflop_strength']}) lost to {winner} ({winning_hand['preflop_strength']})")
+            # Find strong hands that lost
+            losing_hands = [h for h in player_hands if not h['won']]
+            winning_hand = next((h for h in player_hands if h['won']), None)
+            
+            if losing_hands and winning_hand:
+                # Check for genuine bad beats - strong made hands losing to weaker ones or miracle draws
+                for losing_hand in losing_hands:
+                    if self._is_genuine_bad_beat(losing_hand, winning_hand):
+                        victim_name = losing_hand['player']
+                        victim_desc = self._get_simple_hand_description(losing_hand['description'])
+                        winner_desc = self._get_simple_hand_description(winning_hand['description'])
+                        
+                        # Create clear, simple description
+                        description = f"{victim_name} had {victim_desc}, got cracked by {winner}'s {winner_desc}"
+                        
+                        print(f"DEBUG: GENUINE BAD BEAT! {description}")
                         
                         bad_beat_info = {
-                            'victim_hand': f"{strongest_loser['cards']} ({strongest_loser['description']})",
-                            'winner_hand': f"{winning_hand['cards']} ({winning_hand['description']})",
+                            'victim_hand': losing_hand['description'],
+                            'winner_hand': winning_hand['description'],
                             'winner': winner,
-                            'bad_beat_street': "river",  # Default assumption
-                            'description': f"Lost {strongest_loser['description']} to {winning_hand['description']}",
-                            'preflop_favorite': True,
-                            'strength_diff': strongest_loser['preflop_strength'] - winning_hand['preflop_strength']
+                            'description': description
                         }
                         
-                        if strongest_loser['player'] in players:
-                            players[strongest_loser['player']]['bad_beats'].append(bad_beat_info)
-                            print(f"DEBUG: Added bad beat to {strongest_loser['player']}")
+                        if victim_name in players:
+                            players[victim_name]['bad_beats'].append(bad_beat_info)
+                            print(f"DEBUG: Added bad beat to {victim_name}")
                         
                         # Track suckout for winner
                         if winner in players:
                             suckout_info = {
-                                'winning_hand': f"{winning_hand['cards']} ({winning_hand['description']})",
-                                'victim': strongest_loser['player'],
-                                'victim_hand': f"{strongest_loser['cards']} ({strongest_loser['description']})",
-                                'suckout_street': "river",
-                                'description': f"Sucked out with {winning_hand['description']} vs {strongest_loser['description']}",
-                                'strength_diff': strongest_loser['preflop_strength'] - winning_hand['preflop_strength']
+                                'winning_hand': winning_hand['description'],
+                                'victim': victim_name,
+                                'victim_hand': losing_hand['description'],
+                                'description': f"Sucked out with {winner_desc} vs {victim_desc}"
                             }
                             players[winner]['suckouts'].append(suckout_info)
                             print(f"DEBUG: Added suckout to {winner}")
-                    else:
-                        print(f"DEBUG: No bad beat - winner had stronger preflop hand")
+    
+    def _evaluate_made_hand_strength(self, hand_description: str) -> int:
+        """Evaluate the strength of a made hand for bad beat detection"""
+        hand_desc = hand_description.lower()
+        
+        # Royal flush and straight flush
+        if 'royal flush' in hand_desc:
+            return 1000
+        elif 'straight flush' in hand_desc:
+            return 900
+        
+        # Four of a kind (quads)
+        elif 'four of a kind' in hand_desc:
+            return 800
+        
+        # Full house
+        elif 'full house' in hand_desc:
+            return 700
+        
+        # Flush
+        elif 'flush' in hand_desc and 'straight' not in hand_desc:
+            return 600
+        
+        # Straight
+        elif 'straight' in hand_desc and 'flush' not in hand_desc:
+            return 500
+        
+        # Three of a kind (trips/set)
+        elif 'three of a kind' in hand_desc:
+            return 400
+        
+        # Two pair
+        elif 'two pair' in hand_desc:
+            # Strong two pair (high cards)
+            if any(card in hand_desc for card in ['aces', 'kings', 'queens']):
+                return 300
+            else:
+                return 200
+        
+        # One pair
+        elif 'pair of' in hand_desc:
+            # High pairs are stronger
+            if 'aces' in hand_desc:
+                return 150
+            elif 'kings' in hand_desc:
+                return 140
+            elif 'queens' in hand_desc:
+                return 130
+            elif 'jacks' in hand_desc:
+                return 120
+            else:
+                return 100
+        
+        # High card
+        else:
+            return 50
+    
+    def _is_genuine_bad_beat(self, losing_hand: Dict, winning_hand: Dict) -> bool:
+        """Determine if this qualifies as a genuine bad beat"""
+        loser_strength = losing_hand['made_hand_strength']
+        winner_strength = winning_hand['made_hand_strength']
+        
+        # Bad beat criteria:
+        # 1. Loser had a reasonably strong hand (trips or better)
+        # 2. Winner had a stronger hand but got there with luck
+        # 3. OR loser had very strong hand (full house+) and lost to anything better
+        
+        # Strong hands that should qualify as bad beat victims
+        if loser_strength >= 400:  # Three of a kind or better
+            return True
+        
+        # Very strong two pair can be bad beats too
+        if loser_strength >= 300 and winner_strength > loser_strength:
+            return True
+        
+        return False
+    
+    def _get_simple_hand_description(self, full_description: str) -> str:
+        """Convert full poker description to simple terms"""
+        desc = full_description.lower()
+        
+        if 'royal flush' in desc:
+            return 'royal flush'
+        elif 'straight flush' in desc:
+            return 'straight flush'
+        elif 'four of a kind' in desc:
+            # Extract the rank
+            if 'aces' in desc:
+                return 'quad aces'
+            elif 'kings' in desc:
+                return 'quad kings'
+            elif 'queens' in desc:
+                return 'quad queens'
+            else:
+                return 'quads'
+        elif 'full house' in desc:
+            return 'full house'
+        elif 'flush' in desc and 'straight' not in desc:
+            return 'flush'
+        elif 'straight' in desc and 'flush' not in desc:
+            return 'straight'
+        elif 'three of a kind' in desc:
+            if 'aces' in desc:
+                return 'trip aces'
+            elif 'kings' in desc:
+                return 'trip kings'
+            elif 'queens' in desc:
+                return 'trip queens'
+            elif 'jacks' in desc:
+                return 'trip jacks'
+            else:
+                return 'trips'
+        elif 'two pair' in desc:
+            return 'two pair'
+        elif 'pair of aces' in desc:
+            return 'pocket aces'
+        elif 'pair of kings' in desc:
+            return 'pocket kings'
+        elif 'pair of queens' in desc:
+            return 'pocket queens'
+        elif 'pair of jacks' in desc:
+            return 'pocket jacks'
+        elif 'pair of' in desc:
+            return 'a pair'
+        else:
+            return 'high card'
     
     def _evaluate_preflop_strength(self, hole_cards: str) -> int:
         """Evaluate pre-flop hand strength for bad beat detection"""
