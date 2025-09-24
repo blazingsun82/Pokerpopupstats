@@ -294,76 +294,89 @@ class PokerAwardsParser:
     
     def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
         """Analyze showdown hands to detect genuine bad beats - when strong made hands lose"""
-        if '*** SHOW DOWN ***' not in hand_text:
+        try:
+            if '*** SHOW DOWN ***' not in hand_text:
+                return
+                
+            # Extract showdown section
+            showdown_section = hand_text.split('*** SHOW DOWN ***')[1]
+            print(f"DEBUG: Found showdown section: {showdown_section[:200]}...")
+            
+            # Find all players who showed hands
+            showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
+            showdown_matches = re.findall(showdown_pattern, showdown_section)
+            
+            # Find who won the pot
+            winner_pattern = r'(\w+(?:\*\d+)?) collected (\d+) from pot'
+            winner_match = re.search(winner_pattern, hand_text)
+            winner = winner_match.group(1) if winner_match else None
+            
+            print(f"DEBUG: Showdown found - {len(showdown_matches)} players showed hands, winner: {winner}")
+            
+            # Only analyze hands where both players showed (for clear bad beat identification)
+            if len(showdown_matches) >= 2 and winner:
+                player_hands = []
+                for player, cards, hand_desc in showdown_matches:
+                    try:
+                        made_hand_strength = self._evaluate_made_hand_strength(hand_desc)
+                        player_hands.append({
+                            'player': player,
+                            'cards': cards,
+                            'description': hand_desc,
+                            'made_hand_strength': made_hand_strength,
+                            'won': player == winner
+                        })
+                        print(f"DEBUG: {player} showed {cards} ({hand_desc}) - made hand strength: {made_hand_strength}")
+                    except Exception as e:
+                        print(f"DEBUG: Error processing player {player}: {e}")
+                        continue
+                
+                # Find strong hands that lost
+                losing_hands = [h for h in player_hands if not h['won']]
+                winning_hand = next((h for h in player_hands if h['won']), None)
+                
+                if losing_hands and winning_hand:
+                    # Check for genuine bad beats - strong made hands losing to weaker ones or miracle draws
+                    for losing_hand in losing_hands:
+                        try:
+                            if self._is_genuine_bad_beat(losing_hand, winning_hand):
+                                victim_name = losing_hand['player']
+                                victim_desc = self._get_simple_hand_description(losing_hand['description'])
+                                winner_desc = self._get_simple_hand_description(winning_hand['description'])
+                                
+                                # Create clear, simple description
+                                description = f"{victim_name} had {victim_desc}, got cracked by {winner}'s {winner_desc}"
+                                
+                                print(f"DEBUG: GENUINE BAD BEAT! {description}")
+                                
+                                bad_beat_info = {
+                                    'victim_hand': losing_hand['description'],
+                                    'winner_hand': winning_hand['description'],
+                                    'winner': winner,
+                                    'description': description
+                                }
+                                
+                                if victim_name in players:
+                                    players[victim_name]['bad_beats'].append(bad_beat_info)
+                                    print(f"DEBUG: Added bad beat to {victim_name}")
+                                
+                                # Track suckout for winner
+                                if winner in players:
+                                    suckout_info = {
+                                        'winning_hand': winning_hand['description'],
+                                        'victim': victim_name,
+                                        'victim_hand': losing_hand['description'],
+                                        'description': f"Sucked out with {winner_desc} vs {victim_desc}"
+                                    }
+                                    players[winner]['suckouts'].append(suckout_info)
+                                    print(f"DEBUG: Added suckout to {winner}")
+                        except Exception as e:
+                            print(f"DEBUG: Error processing bad beat for {losing_hand['player']}: {e}")
+                            continue
+                            
+        except Exception as e:
+            print(f"DEBUG: Error in bad beat analysis: {e}")
             return
-            
-        # Extract showdown section
-        showdown_section = hand_text.split('*** SHOW DOWN ***')[1]
-        print(f"DEBUG: Found showdown section: {showdown_section[:200]}...")
-        
-        # Find all players who showed hands
-        showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
-        showdown_matches = re.findall(showdown_pattern, showdown_section)
-        
-        # Find who won the pot
-        winner_pattern = r'(\w+(?:\*\d+)?) collected (\d+) from pot'
-        winner_match = re.search(winner_pattern, hand_text)
-        winner = winner_match.group(1) if winner_match else None
-        
-        print(f"DEBUG: Showdown found - {len(showdown_matches)} players showed hands, winner: {winner}")
-        
-        # Only analyze hands where both players showed (for clear bad beat identification)
-        if len(showdown_matches) >= 2 and winner:
-            player_hands = []
-            for player, cards, hand_desc in showdown_matches:
-                made_hand_strength = self._evaluate_made_hand_strength(hand_desc)
-                player_hands.append({
-                    'player': player,
-                    'cards': cards,
-                    'description': hand_desc,
-                    'made_hand_strength': made_hand_strength,
-                    'won': player == winner
-                })
-                print(f"DEBUG: {player} showed {cards} ({hand_desc}) - made hand strength: {made_hand_strength}")
-            
-            # Find strong hands that lost
-            losing_hands = [h for h in player_hands if not h['won']]
-            winning_hand = next((h for h in player_hands if h['won']), None)
-            
-            if losing_hands and winning_hand:
-                # Check for genuine bad beats - strong made hands losing to weaker ones or miracle draws
-                for losing_hand in losing_hands:
-                    if self._is_genuine_bad_beat(losing_hand, winning_hand):
-                        victim_name = losing_hand['player']
-                        victim_desc = self._get_simple_hand_description(losing_hand['description'])
-                        winner_desc = self._get_simple_hand_description(winning_hand['description'])
-                        
-                        # Create clear, simple description
-                        description = f"{victim_name} had {victim_desc}, got cracked by {winner}'s {winner_desc}"
-                        
-                        print(f"DEBUG: GENUINE BAD BEAT! {description}")
-                        
-                        bad_beat_info = {
-                            'victim_hand': losing_hand['description'],
-                            'winner_hand': winning_hand['description'],
-                            'winner': winner,
-                            'description': description
-                        }
-                        
-                        if victim_name in players:
-                            players[victim_name]['bad_beats'].append(bad_beat_info)
-                            print(f"DEBUG: Added bad beat to {victim_name}")
-                        
-                        # Track suckout for winner
-                        if winner in players:
-                            suckout_info = {
-                                'winning_hand': winning_hand['description'],
-                                'victim': victim_name,
-                                'victim_hand': losing_hand['description'],
-                                'description': f"Sucked out with {winner_desc} vs {victim_desc}"
-                            }
-                            players[winner]['suckouts'].append(suckout_info)
-                            print(f"DEBUG: Added suckout to {winner}")
     
     def _evaluate_made_hand_strength(self, hand_description: str) -> int:
         """Evaluate the strength of a made hand for bad beat detection"""
@@ -492,16 +505,14 @@ class PokerAwardsParser:
             return 'high card'
     
     def _evaluate_preflop_strength(self, hole_cards: str) -> int:
-        """Evaluate pre-flop hand strength for bad beat detection"""
+        """Evaluate pre-flop hand strength - kept for compatibility"""
         cards = hole_cards.strip().split()
         if len(cards) != 2:
             return 0
         
         # Parse cards
-        card1_rank = cards[0][0]
-        card1_suit = cards[0][1]
-        card2_rank = cards[1][0]
-        card2_suit = cards[1][1]
+        card1_rank = cards[0][0] if len(cards[0]) > 0 else '2'
+        card2_rank = cards[1][0] if len(cards[1]) > 0 else '2'
         
         # Convert face cards to numbers for easier comparison
         rank_values = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, 
@@ -510,56 +521,24 @@ class PokerAwardsParser:
         val1 = rank_values.get(card1_rank, 0)
         val2 = rank_values.get(card2_rank, 0)
         
-        is_suited = card1_suit == card2_suit
-        is_pair = val1 == val2
-        
-        # Premium hands (very strong pre-flop)
-        if is_pair:
+        if val1 == val2:  # Pair
             if val1 >= 13:  # AA, KK
                 return 100
             elif val1 >= 11:  # QQ, JJ
                 return 90
             elif val1 >= 9:   # TT, 99
                 return 80
-            elif val1 >= 7:   # 88, 77
+            else:
                 return 70
-            else:  # 66 and below
-                return 60
         
         # Non-pair hands
         high_card = max(val1, val2)
-        low_card = min(val1, val2)
-        
-        # AK, AQ type hands
-        if high_card == 14:  # Ace
-            if low_card >= 13:  # AK
-                return 85 if is_suited else 80
-            elif low_card >= 12:  # AQ
-                return 75 if is_suited else 70
-            elif low_card >= 11:  # AJ
-                return 65 if is_suited else 60
-            elif low_card >= 10:  # AT
-                return 55 if is_suited else 50
-            else:
-                return 40 if is_suited else 30
-        
-        # King high hands
-        elif high_card == 13:  # King
-            if low_card >= 12:  # KQ
-                return 65 if is_suited else 60
-            elif low_card >= 11:  # KJ
-                return 55 if is_suited else 50
-            else:
-                return 35 if is_suited else 25
-        
-        # Connected cards and suited connectors
-        elif abs(val1 - val2) == 1:  # Connected
-            return 45 if is_suited else 35
-        elif abs(val1 - val2) == 2:  # One gap
-            return 35 if is_suited else 25
-        
-        # Everything else
-        return 20 if is_suited else 10
+        if high_card == 14:  # Ace high
+            return 80
+        elif high_card >= 12:  # King or Queen high
+            return 60
+        else:
+            return 40
     
     def _determine_final_positions(self, players: Dict, full_text: str):
         """Determine final tournament positions"""
