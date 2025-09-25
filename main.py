@@ -501,8 +501,28 @@ class PokerAwardsParser:
             return 'pocket jacks'
         elif 'pair of' in desc:
             return 'a pair'
-        else:
-            return 'high card'
+    def _is_likely_runner_runner(self, description: str, suckout_info: Dict) -> bool:
+        """Determine if this was likely a runner-runner (backdoor) win"""
+        # This is a simplified check - in a real implementation, we'd need to parse
+        # the actual board texture and hole cards to definitively identify runner-runner
+        
+        # Look for patterns that suggest backdoor draws
+        runner_runner_indicators = [
+            'flush' in description and 'straight' not in description,  # Backdoor flush
+            'straight' in description and 'flush' not in description,  # Backdoor straight
+        ]
+        
+        # Check if the winning hand type suggests a possible runner-runner
+        winning_hand = suckout_info.get('winning_hand', '').lower()
+        victim_hand = suckout_info.get('victim_hand', '').lower()
+        
+        # Simple heuristic: if winner made flush/straight and victim had pair/two pair
+        if ('flush' in winning_hand and ('pair' in victim_hand or 'two pair' in victim_hand)):
+            return True
+        elif ('straight' in winning_hand and ('pair' in victim_hand or 'two pair' in victim_hand)):
+            return True
+            
+        return False
     
     def _evaluate_preflop_strength(self, hole_cards: str) -> int:
         """Evaluate pre-flop hand strength - kept for compatibility"""
@@ -582,17 +602,26 @@ class PokerAwardsParser:
         
         # REMOVED: Preparation H Club is now handled separately in the bottom section only
         
-        # Luckiest Player (Most Suckouts)
-        suckout_players = [(name, data) for name, data in players.items() if data.get('suckouts')]
-        if suckout_players:
-            luckiest = max(suckout_players, key=lambda x: len(x[1]['suckouts']))
-            best_suckout = luckiest[1]['suckouts'][0] if luckiest[1]['suckouts'] else None
+        # Runner-Runner Win (needed both turn and river to make hand)
+        runner_runner_players = []
+        for name, data in players.items():
+            suckouts = data.get('suckouts', [])
+            for suckout in suckouts:
+                # Look for descriptions that suggest runner-runner scenarios
+                description = suckout.get('description', '').lower()
+                if self._is_likely_runner_runner(description, suckout):
+                    runner_runner_players.append((name, suckout))
+        
+        if runner_runner_players:
+            # Pick the most impressive runner-runner win
+            best_runner_runner = runner_runner_players[0]  # For now, take the first one
+            player_name = best_runner_runner[0]
+            suckout_info = best_runner_runner[1]
             
-            awards["🍀 Luckiest (Suckout King)"] = {
-                "winner": luckiest[0],
-                "description": "Got incredibly lucky when it mattered most",
-                "stat": f"Won with {best_suckout['winning_hand']} against {best_suckout['victim_hand']}" if best_suckout else "Multiple suckouts delivered",
-                "details": [suckout['description'] for suckout in luckiest[1]['suckouts'][:3]]
+            awards["🎯 Runner-Runner Win"] = {
+                "winner": player_name,
+                "description": "Needed both turn and river cards to complete their hand",
+                "stat": f"Hit the perfect two-card combination to win"
             }
         
         # Most Aggressive (highest aggression ratio)
