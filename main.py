@@ -627,13 +627,31 @@ class PokerAwardsParser:
                 "stat": "Classic rock-solid play"
             }
         
-        # Donkey (most hands played)
-        action_player = max(players.items(), key=lambda x: x[1]['hands_played'])
-        awards["🐴 Donkey"] = {
-            "winner": action_player[0],
-            "description": "Played way too many hands, couldn't fold to save their life",
-            "stat": f"Played {action_player[1]['hands_played']} hands"
-        }
+        # Donkey (poor decision making - high VPIP with low success rate)
+        # Look for players who play too many hands with poor results
+        donkey_candidates = []
+        for name, data in players.items():
+            if data['hands_played'] > 10:  # Need sufficient sample size
+                vpip = data['hands_voluntarily_played'] / data['hands_played']
+                win_rate = data.get('showdown_wins', 0) / max(data.get('showdowns', 1), 1)
+                
+                # Donkey criteria: plays too many hands (high VPIP) with poor results
+                if vpip > 0.4 and win_rate < 0.3:  # Plays 40%+ hands but wins <30% at showdown
+                    donkey_score = vpip / (win_rate + 0.1)  # Higher score = more donkey-like
+                    donkey_candidates.append((name, data, donkey_score))
+        
+        # Only award if there's a clear donkey (someone significantly worse than others)
+        if donkey_candidates:
+            donkey_candidates.sort(key=lambda x: x[2], reverse=True)
+            worst_player = donkey_candidates[0]
+            
+            # Only give award if they're clearly playing poorly (not just unlucky)
+            if worst_player[2] > 1.5:  # Threshold for clear donkey behavior
+                awards["🐴 Donkey"] = {
+                    "winner": worst_player[0],
+                    "description": "Made questionable decisions and played too many weak hands",
+                    "stat": f"Played {int(worst_player[1]['hands_voluntarily_played'] / worst_player[1]['hands_played'] * 100)}% of hands with poor results"
+                }
         
         # ABC Player (predictable, straightforward play)
         if aggressive_players:
