@@ -7,12 +7,16 @@ from typing import Dict, Any, List
 from pathlib import Path
 from io import BytesIO
 
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
+
+# PostgreSQL imports
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = FastAPI(title="Bingo Poker Pro's Awards Board", description="Tournament awards tracking system")
 
@@ -34,10 +38,13 @@ if Path("static").exists():
 
 # Configuration - change this secret path!
 SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "bingo-poker-secret-2025")
+ADMIN_SECRET_PATH = os.getenv("ADMIN_SECRET", "admin-control-2025")
 RESULTS_FILE = Path("results.json")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Debug: Print the upload path
 print(f"Upload path configured as: /upload/{SECRET_UPLOAD_PATH}")
+print(f"Admin path configured as: /admin/{ADMIN_SECRET_PATH}")
 
 # Add environment variable to store results as backup
 def save_to_env_backup(data):
@@ -88,6 +95,162 @@ class SSEManager:
             self.remove_connection(dead_conn)
 
 sse_manager = SSEManager()
+
+# PostgreSQL Database Functions
+def get_db_connection():
+    """Get database connection"""
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL not configured")
+    return psycopg2.connect(DATABASE_URL)
+
+def init_database():
+    """Initialize database tables"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Create player_points table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS player_points (
+                player_name VARCHAR(100) PRIMARY KEY,
+                total_points DECIMAL(10,2) DEFAULT 0,
+                avatar VARCHAR(50) DEFAULT '',
+                tournaments_played INTEGER DEFAULT 0,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create points_history table for audit trail
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS points_history (
+                id SERIAL PRIMARY KEY,
+                player_name VARCHAR(100),
+                tournament_date VARCHAR(50),
+                points_change DECIMAL(10,2),
+                action_type VARCHAR(50),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+
+def get_all_player_points():
+    """Get all player points ordered by total"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute('''
+            SELECT player_name, total_points, avatar, tournaments_played
+            FROM player_points
+            ORDER BY total_points DESC
+        ''')
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        return results
+    except Exception as e:
+        print(f"Error fetching player points: {e}")
+        return []
+
+def update_player_points(player_name: str, points: float, tournament_date: str):
+    """Add points to player's total"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Upsert player points
+        cur.execute('''
+            INSERT INTO player_points (player_name, total_points, tournaments_played)
+            VALUES (%s, %s, 1)
+            ON CONFLICT (player_name) 
+            DO UPDATE SET 
+                total_points = player_points.total_points + %s,
+                tournaments_played = player_points.tournaments_played + 1,
+                last_updated = CURRENT_TIMESTAMP
+        ''', (player_name, points, points))
+        
+        # Record in history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            VALUES (%s, %s, %s, 'tournament_result')
+        ''', (player_name, tournament_date, points))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error updating player points: {e}")
+        return False
+
+def edit_player_points(player_name: str, new_total: float, reason: str):
+    """Manually edit player's total points"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get current points
+        cur.execute('SELECT total_points FROM player_points WHERE player_name = %s', (player_name,))
+        result = cur.fetchone()
+        old_total = result[0] if result else 0
+        
+        # Update total
+        cur.execute('''
+            INSERT INTO player_points (player_name, total_points)
+            VALUES (%s, %s)
+            ON CONFLICT (player_name)
+            DO UPDATE SET total_points = %s, last_updated = CURRENT_TIMESTAMP
+        ''', (player_name, new_total, new_total))
+        
+        # Record in history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            VALUES (%s, %s, %s, %s)
+        ''', (player_name, reason, new_total - old_total, 'manual_edit'))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error editing player points: {e}")
+        return False
+
+def reset_all_points():
+    """Reset all player points to zero"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Archive current data to history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            SELECT player_name, 'season_reset', -total_points, 'season_reset'
+            FROM player_points
+            WHERE total_points > 0
+        ''')
+        
+        # Reset all points
+        cur.execute('UPDATE player_points SET total_points = 0, tournaments_played = 0')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error resetting points: {e}")
+        return False
+
+# Initialize database on startup
+if DATABASE_URL:
+    init_database()
+else:
+    print("WARNING: DATABASE_URL not set - points tracking disabled")
 
 # Awards calculation logic
 class PokerAwardsParser:
@@ -897,6 +1060,73 @@ async def stream_events(request: Request):
             sse_manager.remove_connection(sender)
     
     return EventSourceResponse(event_stream())
+
+# Points Management Routes
+@app.get("/leaderboard", response_class=HTMLResponse)
+async def leaderboard(request: Request):
+    """Display points leaderboard"""
+    players = get_all_player_points()
+    return templates.TemplateResponse("leaderboard.html", {
+        "request": request,
+        "players": players
+    })
+
+@app.post(f"/upload/{SECRET_UPLOAD_PATH}/points")
+async def upload_points(file: UploadFile = File(...), tournament_date: str = Form(...)):
+    """Process uploaded points file"""
+    if not file.filename.endswith('.txt'):
+        raise HTTPException(400, "Please upload a TXT file")
+    
+    try:
+        content = await file.read()
+        text = content.decode('utf-8')
+        
+        # Parse points file - format: "PlayerName: X.XX points" per line
+        lines = text.strip().split('\n')
+        updated_count = 0
+        
+        for line in lines:
+            # Simple parsing - adjust based on actual file format
+            if ':' in line:
+                parts = line.split(':')
+                if len(parts) >= 2:
+                    player_name = parts[0].strip()
+                    points_str = parts[1].strip().replace('points', '').replace('pts', '').strip()
+                    try:
+                        points = float(points_str)
+                        if update_player_points(player_name, points, tournament_date):
+                            updated_count += 1
+                    except ValueError:
+                        continue
+        
+        return {"success": True, "message": f"Updated {updated_count} players", "players_updated": updated_count}
+    
+    except Exception as e:
+        raise HTTPException(500, f"Error processing points file: {str(e)}")
+
+@app.get(f"/admin/{ADMIN_SECRET_PATH}", response_class=HTMLResponse)
+async def admin_panel(request: Request):
+    """Admin control panel"""
+    players = get_all_player_points()
+    return templates.TemplateResponse("admin.html", {
+        "request": request,
+        "players": players,
+        "admin_path": ADMIN_SECRET_PATH
+    })
+
+@app.post(f"/admin/{ADMIN_SECRET_PATH}/edit")
+async def admin_edit_points(player_name: str = Form(...), new_points: float = Form(...), reason: str = Form(...)):
+    """Edit player points manually"""
+    if edit_player_points(player_name, new_points, reason):
+        return RedirectResponse(url=f"/admin/{ADMIN_SECRET_PATH}", status_code=303)
+    raise HTTPException(500, "Failed to update points")
+
+@app.post(f"/admin/{ADMIN_SECRET_PATH}/reset")
+async def admin_reset_all():
+    """Reset all player points"""
+    if reset_all_points():
+        return {"success": True, "message": "All points reset successfully"}
+    raise HTTPException(500, "Failed to reset points")
 
 if __name__ == "__main__":
     import uvicorn
