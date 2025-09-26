@@ -180,10 +180,6 @@
                     <label>Points TXT File</label>
                     <input type="file" name="file" accept=".txt" required>
                 </div>
-                <div class="control-group">
-                    <label>Tournament Date</label>
-                    <input type="text" name="tournament_date" placeholder="e.g., 2025-09-25" required>
-                </div>
                 <button type="submit" class="btn btn-success">Upload Points</button>
             </form>
         </div>
@@ -198,6 +194,7 @@
                 <thead>
                     <tr>
                         <th>Rank</th>
+                        <th>Avatar</th>
                         <th>Player Name</th>
                         <th>Total Points</th>
                         <th>Tournaments</th>
@@ -208,6 +205,7 @@
                     {% for player in players %}
                     <tr>
                         <td>{{ loop.index }}</td>
+                        <td style="font-size: 1.2em;">{{ player.avatar }}</td>
                         <td>{{ player.player_name }}</td>
                         <td>{{ player.total_points }}</td>
                         <td>{{ player.tournaments_played }}</td>
@@ -216,7 +214,12 @@
                                 <input type="hidden" name="player_name" value="{{ player.player_name }}">
                                 <input type="number" step="0.01" name="new_points" value="{{ player.total_points }}" required>
                                 <input type="text" name="reason" placeholder="Reason" required>
-                                <button type="submit" class="btn">Update</button>
+                                <button type="submit" class="btn">Update Points</button>
+                            </form>
+                            <form action="/admin/{{ admin_path }}/update-avatar" method="post" class="edit-form" style="margin-top: 5px;">
+                                <input type="hidden" name="player_name" value="{{ player.player_name }}">
+                                <input type="text" name="avatar" value="{{ player.avatar }}" placeholder="Avatar (emoji)" maxlength="10" style="width: 120px;">
+                                <button type="submit" class="btn">Update Avatar</button>
                             </form>
                         </td>
                     </tr>
