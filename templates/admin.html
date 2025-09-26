@@ -175,7 +175,7 @@
         <!-- Upload Points File -->
         <div class="upload-section">
             <h2>📤 Upload Tournament Points</h2>
-            <form action="/upload/{{ admin_path }}/points" method="post" enctype="multipart/form-data">
+            <form action="/upload/{{ upload_path }}/points" method="post" enctype="multipart/form-data">
                 <div class="control-group">
                     <label>Points TXT File</label>
                     <input type="file" name="file" accept=".txt" required>
@@ -205,7 +205,7 @@
                     {% for player in players %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td style="font-size: 1.2em;">{{ player.avatar }}</td>
+                        <td style="font-size: 1.2em;">{{ player.avatar or '' }}</td>
                         <td>{{ player.player_name }}</td>
                         <td>{{ player.total_points }}</td>
                         <td>{{ player.tournaments_played }}</td>
@@ -218,7 +218,7 @@
                             </form>
                             <form action="/admin/{{ admin_path }}/update-avatar" method="post" class="edit-form" style="margin-top: 5px;">
                                 <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                <input type="text" name="avatar" value="{{ player.avatar }}" placeholder="Avatar (emoji)" maxlength="10" style="width: 120px;">
+                                <input type="text" name="avatar" value="{{ player.avatar or '' }}" placeholder="Avatar (emoji)" maxlength="10" style="width: 120px;">
                                 <button type="submit" class="btn">Update Avatar</button>
                             </form>
                         </td>
