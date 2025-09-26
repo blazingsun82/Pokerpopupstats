@@ -1071,7 +1071,7 @@ async def leaderboard(request: Request):
         "players": players
     })
 
-@app.post(f"/upload/{SECRET_UPLOAD_PATH}/points")
+@app.post("/upload/{SECRET_UPLOAD_PATH}/points")
 async def upload_points(file: UploadFile = File(...), tournament_date: str = Form(...)):
     """Process uploaded points file"""
     if not file.filename.endswith('.txt'):
