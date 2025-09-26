@@ -109,7 +109,7 @@ def init_database():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Create player_points table
+        # Create player_points table with PostgreSQL syntax
         cur.execute('''
             CREATE TABLE IF NOT EXISTS player_points (
                 player_name VARCHAR(100) PRIMARY KEY,
@@ -398,8 +398,8 @@ class PokerAwardsParser:
                     'hands_voluntarily_played': 0,
                     'final_position': None,
                     'max_chips': int(chips),
-                    'bad_beats': [],  # Store specific bad beat hands
-                    'suckouts': []    # Store when they got lucky
+                    'bad_beats': [],
+                    'suckouts': []
                 }
             
             players[player_name]['hands_played'] += 1
@@ -664,6 +664,7 @@ class PokerAwardsParser:
             return 'pocket jacks'
         elif 'pair of' in desc:
             return 'a pair'
+    
     def _is_likely_runner_runner(self, description: str, suckout_info: Dict) -> bool:
         """Determine if this was likely a runner-runner (backdoor) win"""
         # This is a simplified check - in a real implementation, we'd need to parse
@@ -1071,7 +1072,7 @@ async def leaderboard(request: Request):
         "players": players
     })
 
-@app.post("/upload/{SECRET_UPLOAD_PATH}/points")
+@app.post(f"/upload/{SECRET_UPLOAD_PATH}/points")
 async def upload_points(file: UploadFile = File(...), tournament_date: str = Form(...)):
     """Process uploaded points file"""
     if not file.filename.endswith('.txt'):
@@ -1111,7 +1112,8 @@ async def admin_panel(request: Request):
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "players": players,
-        "admin_path": ADMIN_SECRET_PATH
+        "admin_path": ADMIN_SECRET_PATH,
+        "upload_path": SECRET_UPLOAD_PATH
     })
 
 @app.post(f"/admin/{ADMIN_SECRET_PATH}/edit")
@@ -1120,6 +1122,28 @@ async def admin_edit_points(player_name: str = Form(...), new_points: float = Fo
     if edit_player_points(player_name, new_points, reason):
         return RedirectResponse(url=f"/admin/{ADMIN_SECRET_PATH}", status_code=303)
     raise HTTPException(500, "Failed to update points")
+
+@app.post(f"/admin/{ADMIN_SECRET_PATH}/update-avatar")
+async def admin_update_avatar(player_name: str = Form(...), avatar: str = Form(...)):
+    """Update player avatar"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute('''
+            INSERT INTO player_points (player_name, avatar)
+            VALUES (%s, %s)
+            ON CONFLICT (player_name)
+            DO UPDATE SET avatar = %s, last_updated = CURRENT_TIMESTAMP
+        ''', (player_name, avatar, avatar))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return RedirectResponse(url=f"/admin/{ADMIN_SECRET_PATH}", status_code=303)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to update avatar: {str(e)}")
 
 @app.post(f"/admin/{ADMIN_SECRET_PATH}/reset")
 async def admin_reset_all():
