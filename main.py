@@ -116,6 +116,8 @@ def init_database():
                 total_points DECIMAL(10,2) DEFAULT 0,
                 avatar VARCHAR(50) DEFAULT '',
                 tournaments_played INTEGER DEFAULT 0,
+                wins INTEGER DEFAULT 0,
+                knockouts INTEGER DEFAULT 0,
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -145,7 +147,7 @@ def get_all_player_points():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute('''
-            SELECT player_name, total_points, avatar, tournaments_played
+            SELECT player_name, total_points, avatar, tournaments_played, wins, knockouts
             FROM player_points
             ORDER BY total_points DESC
         ''')
@@ -157,22 +159,24 @@ def get_all_player_points():
         print(f"Error fetching player points: {e}")
         return []
 
-def update_player_points(player_name: str, points: float, tournament_date: str):
-    """Add points to player's total"""
+def update_player_points(player_name: str, points: float, wins: int, kos: int, tournament_date: str):
+    """Add points, wins, and KOs to player's total"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
         # Upsert player points
         cur.execute('''
-            INSERT INTO player_points (player_name, total_points, tournaments_played)
-            VALUES (%s, %s, 1)
+            INSERT INTO player_points (player_name, total_points, wins, knockouts, tournaments_played)
+            VALUES (%s, %s, %s, %s, 1)
             ON CONFLICT (player_name) 
             DO UPDATE SET 
                 total_points = player_points.total_points + %s,
+                wins = player_points.wins + %s,
+                knockouts = player_points.knockouts + %s,
                 tournaments_played = player_points.tournaments_played + 1,
                 last_updated = CURRENT_TIMESTAMP
-        ''', (player_name, points, points))
+        ''', (player_name, points, wins, kos, points, wins, kos))
         
         # Record in history
         cur.execute('''
@@ -236,7 +240,7 @@ def reset_all_points():
         ''')
         
         # Reset all points
-        cur.execute('UPDATE player_points SET total_points = 0, tournaments_played = 0')
+        cur.execute('UPDATE player_points SET total_points = 0, wins = 0, knockouts = 0, tournaments_played = 0')
         
         conn.commit()
         cur.close()
@@ -764,7 +768,7 @@ class PokerAwardsParser:
                 "stat": "Heads-up warrior"
             }
         
-        # Runner-Runner Win (needed both turn and river to make hand)
+        # Runner-Runner Win
         runner_runner_players = []
         for name, data in players.items():
             suckouts = data.get('suckouts', [])
@@ -805,7 +809,7 @@ class PokerAwardsParser:
                 "stat": "The human slot machine"
             }
         
-        # Tightest Player (Rock Award)
+        # Tightest Player
         if aggressive_players:
             tightest = min(aggressive_players,
                          key=lambda x: x[1]['hands_voluntarily_played'] / max(x[1]['hands_played'], 1))
@@ -908,7 +912,7 @@ class PokerAwardsParser:
         }
     
     def _generate_sample_data(self):
-        """Fallback sample data with separate preparation H club"""
+        """Fallback sample data"""
         return {
             "tournament_date": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "tournament_id": "3928736979",
@@ -920,7 +924,7 @@ class PokerAwardsParser:
 
 parser = PokerAwardsParser()
 
-# Load existing results with backup system
+# Load existing results
 def load_results():
     if RESULTS_FILE.exists():
         try:
@@ -959,7 +963,7 @@ def save_results(data):
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def public_board(request: Request):
-    """Public awards board - no upload capability"""
+    """Public awards board"""
     results = load_results()
     return templates.TemplateResponse("board.html", {
         "request": request,
@@ -969,7 +973,7 @@ async def public_board(request: Request):
 
 @app.get(f"/upload/{SECRET_UPLOAD_PATH}", response_class=HTMLResponse)
 async def upload_page(request: Request):
-    """Secret upload page - drag & drop interface"""
+    """Secret upload page"""
     results = load_results()
     return templates.TemplateResponse("upload.html", {
         "request": request,
@@ -981,10 +985,8 @@ async def upload_page(request: Request):
 async def process_upload(file: UploadFile = File(...)):
     """Process the uploaded TXT file"""
     print(f"Received file upload: {file.filename}")
-    print(f"File content type: {file.content_type}")
     
     if not file.filename.endswith('.txt'):
-        print(f"Rejected file: not a .txt file")
         raise HTTPException(400, "Please upload a TXT file")
     
     try:
@@ -992,17 +994,12 @@ async def process_upload(file: UploadFile = File(...)):
         print(f"Read {len(content)} bytes from uploaded file")
         
         results = parser.parse_txt(content)
-        print(f"Parsing complete. Results: {results}")
         
         if "POKER_RESULTS_BACKUP" in os.environ:
             del os.environ["POKER_RESULTS_BACKUP"]
-            print("Cleared old environment backup")
         
         save_results(results)
-        print("Results saved successfully (with backup)")
-        
         await sse_manager.broadcast_update(results)
-        print("Broadcast update sent")
         
         return {"success": True, "message": "Awards updated successfully!", "results": results}
     
@@ -1049,7 +1046,7 @@ async def leaderboard(request: Request):
 
 @app.post(f"/upload/{SECRET_UPLOAD_PATH}/points")
 async def upload_points(file: UploadFile = File(...)):
-    """Process uploaded points file"""
+    """Process uploaded points file with wins and KOs"""
     if not file.filename.endswith('.txt'):
         raise HTTPException(400, "Please upload a TXT file")
     
@@ -1057,27 +1054,45 @@ async def upload_points(file: UploadFile = File(...)):
         content = await file.read()
         text = content.decode('utf-8')
         
-        # Use today's date for tournament
         tournament_date = datetime.now().strftime("%Y-%m-%d")
         
-        # Parse points file - format: "PlayerName: X.XX points" per line
         lines = text.strip().split('\n')
         updated_count = 0
+        errors = []
         
-        for line in lines:
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Parse format: "PlayerName: Points, Wins, KO"
             if ':' in line:
-                parts = line.split(':')
-                if len(parts) >= 2:
-                    player_name = parts[0].strip()
-                    points_str = parts[1].strip().replace('points', '').replace('pts', '').strip()
-                    try:
-                        points = float(points_str)
-                        if update_player_points(player_name, points, tournament_date):
-                            updated_count += 1
-                    except ValueError:
-                        continue
+                parts = line.split(':', 1)
+                player_name = parts[0].strip()
+                values = parts[1].strip().split(',')
+                
+                try:
+                    points = float(values[0].strip())
+                    wins = int(values[1].strip()) if len(values) > 1 else 0
+                    kos = int(values[2].strip()) if len(values) > 2 else 0
+                    
+                    if update_player_points(player_name, points, wins, kos, tournament_date):
+                        updated_count += 1
+                except (ValueError, IndexError) as e:
+                    errors.append(f"Line {line_num}: Invalid format - {str(e)}")
+            else:
+                errors.append(f"Line {line_num}: Missing colon separator")
         
-        return {"success": True, "message": f"Updated {updated_count} players", "players_updated": updated_count}
+        message = f"Updated {updated_count} players"
+        if errors:
+            message += f". Errors: {'; '.join(errors[:3])}"
+        
+        return {
+            "success": True,
+            "message": message,
+            "players_updated": updated_count,
+            "errors": errors if errors else None
+        }
     
     except Exception as e:
         raise HTTPException(500, f"Error processing points file: {str(e)}")
