@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -95,12 +95,13 @@
         .players-table {
             background: rgba(30, 41, 59, 0.8);
             border-radius: 16px;
-            overflow: hidden;
+            overflow-x: auto;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 1000px;
         }
 
         th {
@@ -124,10 +125,15 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
-        .edit-form input {
-            width: 100px;
+        .edit-form input[type="number"] {
+            width: 80px;
+        }
+
+        .edit-form input[type="text"] {
+            width: 120px;
         }
 
         .edit-form button {
@@ -152,6 +158,15 @@
             margin-bottom: 30px;
         }
 
+        .upload-section h2 {
+            margin-bottom: 15px;
+        }
+
+        .upload-section p {
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
         .back-link {
             display: inline-block;
             margin-top: 20px;
@@ -163,24 +178,33 @@
         .back-link:hover {
             text-decoration: underline;
         }
+
+        .stat-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(59, 130, 246, 0.2);
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🛠️ Admin Control Panel</h1>
-            <p>Manage player points and tournament results</p>
+            <p>Manage player points, wins, knockouts, and tournament results</p>
         </div>
 
         <!-- Upload Points File -->
         <div class="upload-section">
-            <h2>📤 Upload Tournament Points</h2>
+            <h2>📤 Upload Tournament Results</h2>
+            <p>Format: PlayerName: Points, Wins, KO (Example: eskimos11: 20.53, 2, 0)</p>
             <form action="/upload/{{ upload_path }}/points" method="post" enctype="multipart/form-data">
                 <div class="control-group">
-                    <label>Points TXT File</label>
+                    <label>Results TXT File</label>
                     <input type="file" name="file" accept=".txt" required>
                 </div>
-                <button type="submit" class="btn btn-success">Upload Points</button>
+                <button type="submit" class="btn btn-success">Upload Results</button>
             </form>
         </div>
 
@@ -197,6 +221,8 @@
                         <th>Avatar</th>
                         <th>Player Name</th>
                         <th>Total Points</th>
+                        <th>Wins</th>
+                        <th>KOs</th>
                         <th>Tournaments</th>
                         <th>Actions</th>
                     </tr>
@@ -207,18 +233,20 @@
                         <td>{{ loop.index }}</td>
                         <td style="font-size: 1.2em;">{{ player.avatar or '' }}</td>
                         <td>{{ player.player_name }}</td>
-                        <td>{{ player.total_points }}</td>
-                        <td>{{ player.tournaments_played }}</td>
+                        <td><span class="stat-badge">{{ player.total_points }}</span></td>
+                        <td><span class="stat-badge">{{ player.wins or 0 }}</span></td>
+                        <td><span class="stat-badge">{{ player.knockouts or 0 }}</span></td>
+                        <td><span class="stat-badge">{{ player.tournaments_played }}</span></td>
                         <td>
                             <form action="/admin/{{ admin_path }}/edit" method="post" class="edit-form">
                                 <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                <input type="number" step="0.01" name="new_points" value="{{ player.total_points }}" required>
+                                <input type="number" step="0.01" name="new_points" value="{{ player.total_points }}" placeholder="Points">
                                 <input type="text" name="reason" placeholder="Reason" required>
                                 <button type="submit" class="btn">Update Points</button>
                             </form>
                             <form action="/admin/{{ admin_path }}/update-avatar" method="post" class="edit-form" style="margin-top: 5px;">
                                 <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                <input type="text" name="avatar" value="{{ player.avatar or '' }}" placeholder="Avatar (emoji)" maxlength="10" style="width: 120px;">
+                                <input type="text" name="avatar" value="{{ player.avatar or '' }}" placeholder="Avatar" maxlength="10">
                                 <button type="submit" class="btn">Update Avatar</button>
                             </form>
                         </td>
