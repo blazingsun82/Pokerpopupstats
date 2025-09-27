@@ -764,23 +764,18 @@ class PokerAwardsParser:
                 "stat": "Heads-up warrior"
             }
         
-        # REMOVED: Preparation H Club is now handled separately in the bottom section only
-        
         # Runner-Runner Win (needed both turn and river to make hand)
         runner_runner_players = []
         for name, data in players.items():
             suckouts = data.get('suckouts', [])
             for suckout in suckouts:
-                # Look for descriptions that suggest runner-runner scenarios
                 description = suckout.get('description', '').lower()
                 if self._is_likely_runner_runner(description, suckout):
                     runner_runner_players.append((name, suckout))
         
         if runner_runner_players:
-            # Pick the most impressive runner-runner win
-            best_runner_runner = runner_runner_players[0]  # For now, take the first one
+            best_runner_runner = runner_runner_players[0]
             player_name = best_runner_runner[0]
-            suckout_info = best_runner_runner[1]
             
             awards["🎯 Runner-Runner Win"] = {
                 "winner": player_name,
@@ -788,7 +783,7 @@ class PokerAwardsParser:
                 "stat": f"Hit the perfect two-card combination to win"
             }
         
-        # Most Aggressive (highest aggression ratio)
+        # Most Aggressive
         aggressive_players = [(name, data) for name, data in players.items() 
                             if data['hands_played'] > 5]
         if aggressive_players:
@@ -820,33 +815,29 @@ class PokerAwardsParser:
                 "stat": "Classic rock-solid play"
             }
         
-        # Donkey (poor decision making - high VPIP with low success rate)
-        # Look for players who play too many hands with poor results
+        # Donkey
         donkey_candidates = []
         for name, data in players.items():
-            if data['hands_played'] > 10:  # Need sufficient sample size
+            if data['hands_played'] > 10:
                 vpip = data['hands_voluntarily_played'] / data['hands_played']
                 win_rate = data.get('showdown_wins', 0) / max(data.get('showdowns', 1), 1)
                 
-                # Donkey criteria: plays too many hands (high VPIP) with poor results
-                if vpip > 0.4 and win_rate < 0.3:  # Plays 40%+ hands but wins <30% at showdown
-                    donkey_score = vpip / (win_rate + 0.1)  # Higher score = more donkey-like
+                if vpip > 0.4 and win_rate < 0.3:
+                    donkey_score = vpip / (win_rate + 0.1)
                     donkey_candidates.append((name, data, donkey_score))
         
-        # Only award if there's a clear donkey (someone significantly worse than others)
         if donkey_candidates:
             donkey_candidates.sort(key=lambda x: x[2], reverse=True)
             worst_player = donkey_candidates[0]
             
-            # Only give award if they're clearly playing poorly (not just unlucky)
-            if worst_player[2] > 1.5:  # Threshold for clear donkey behavior
+            if worst_player[2] > 1.5:
                 awards["🐴 Donkey"] = {
                     "winner": worst_player[0],
                     "description": "Made questionable decisions and played too many weak hands",
                     "stat": f"Played {int(worst_player[1]['hands_voluntarily_played'] / worst_player[1]['hands_played'] * 100)}% of hands with poor results"
                 }
         
-        # ABC Player (predictable, straightforward play)
+        # ABC Player
         if aggressive_players:
             abc_candidates = [(name, data) for name, data in aggressive_players
                             if 0.15 < (data['aggressive_actions'] / data['hands_played']) < 0.35]
@@ -871,7 +862,7 @@ class PokerAwardsParser:
                 "stat": "Master of the poker face"
             }
         
-        # Bubble Boy (if enough players)
+        # Bubble Boy
         if len(players) >= 4:
             bubble_position = (len(players) + 1) // 2
             bubble_candidates = [p for p in players.items() 
@@ -923,7 +914,7 @@ class PokerAwardsParser:
             "tournament_id": "3928736979",
             "total_players": 6,
             "awards": self._get_sample_awards(),
-            "preparation_h_club": [],  # Empty array - no hardcoded bad beats
+            "preparation_h_club": [],
             "last_updated": datetime.now().isoformat()
         }
 
@@ -931,22 +922,18 @@ parser = PokerAwardsParser()
 
 # Load existing results with backup system
 def load_results():
-    # First try to load from file
     if RESULTS_FILE.exists():
         try:
             with open(RESULTS_FILE, 'r') as f:
                 data = json.load(f)
-                # Save to backup when successfully loaded
                 save_to_env_backup(data)
                 return data
         except Exception as e:
             print(f"Failed to load from file: {e}")
     
-    # If file doesn't exist or failed, try backup
     backup_data = load_from_env_backup()
     if backup_data:
         print("Loaded from environment backup")
-        # Reconstruct full data structure
         return {
             "tournament_date": backup_data.get("tournament_date", datetime.now().strftime("%B %d, %Y at %I:%M %p")),
             "tournament_id": backup_data.get("tournament_id", "Unknown"),
@@ -956,15 +943,11 @@ def load_results():
             "last_updated": datetime.now().isoformat()
         }
     
-    # If no backup, use sample data
     print("No existing data found, using sample data")
     return parser._generate_sample_data()
 
 def save_results(data):
-    # Always save backup to environment FIRST
     save_to_env_backup(data)
-    
-    # Save to file
     try:
         with open(RESULTS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
@@ -1005,24 +988,19 @@ async def process_upload(file: UploadFile = File(...)):
         raise HTTPException(400, "Please upload a TXT file")
     
     try:
-        # Read TXT content
         content = await file.read()
         print(f"Read {len(content)} bytes from uploaded file")
         
-        # Parse and calculate awards
         results = parser.parse_txt(content)
         print(f"Parsing complete. Results: {results}")
         
-        # Clear any old environment backup before saving new data
         if "POKER_RESULTS_BACKUP" in os.environ:
             del os.environ["POKER_RESULTS_BACKUP"]
             print("Cleared old environment backup")
         
-        # Save results with backup
         save_results(results)
         print("Results saved successfully (with backup)")
         
-        # Broadcast to all connected clients
         await sse_manager.broadcast_update(results)
         print("Broadcast update sent")
         
@@ -1038,11 +1016,9 @@ async def process_upload(file: UploadFile = File(...)):
 async def stream_events(request: Request):
     """SSE endpoint for real-time updates"""
     async def event_stream():
-        # Send current data immediately
         current_data = load_results()
         yield {"event": "init", "data": json.dumps(current_data)}
         
-        # Create a queue for this connection
         queue = asyncio.Queue()
         
         async def sender(event_data):
@@ -1052,7 +1028,6 @@ async def stream_events(request: Request):
         
         try:
             while True:
-                # Wait for new events
                 event_data = await queue.get()
                 yield event_data
         except asyncio.CancelledError:
@@ -1073,7 +1048,7 @@ async def leaderboard(request: Request):
     })
 
 @app.post(f"/upload/{SECRET_UPLOAD_PATH}/points")
-async def upload_points(file: UploadFile = File(...), tournament_date: str = Form(...)):
+async def upload_points(file: UploadFile = File(...)):
     """Process uploaded points file"""
     if not file.filename.endswith('.txt'):
         raise HTTPException(400, "Please upload a TXT file")
@@ -1082,12 +1057,14 @@ async def upload_points(file: UploadFile = File(...), tournament_date: str = For
         content = await file.read()
         text = content.decode('utf-8')
         
+        # Use today's date for tournament
+        tournament_date = datetime.now().strftime("%Y-%m-%d")
+        
         # Parse points file - format: "PlayerName: X.XX points" per line
         lines = text.strip().split('\n')
         updated_count = 0
         
         for line in lines:
-            # Simple parsing - adjust based on actual file format
             if ':' in line:
                 parts = line.split(':')
                 if len(parts) >= 2:
