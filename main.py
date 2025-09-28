@@ -39,37 +39,11 @@ if Path("static").exists():
 # Configuration - change this secret path!
 SECRET_UPLOAD_PATH = os.getenv("UPLOAD_SECRET", "bingo-poker-secret-2025")
 ADMIN_SECRET_PATH = os.getenv("ADMIN_SECRET", "admin-control-2025")
-RESULTS_FILE = Path("results.json")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Debug: Print the upload path
 print(f"Upload path configured as: /upload/{SECRET_UPLOAD_PATH}")
 print(f"Admin path configured as: /admin/{ADMIN_SECRET_PATH}")
-
-# Add environment variable to store results as backup
-def save_to_env_backup(data):
-    """Save critical data to environment variable as backup"""
-    try:
-        # Store key data in environment variable for persistence
-        backup_data = {
-            "tournament_date": data.get("tournament_date"),
-            "tournament_id": data.get("tournament_id"),
-            "awards": data.get("awards", {}),
-            "preparation_h_club": data.get("preparation_h_club", [])
-        }
-        os.environ["POKER_RESULTS_BACKUP"] = json.dumps(backup_data)
-    except Exception as e:
-        print(f"Failed to save backup: {e}")
-
-def load_from_env_backup():
-    """Load results from environment variable backup"""
-    try:
-        backup_str = os.environ.get("POKER_RESULTS_BACKUP")
-        if backup_str:
-            return json.loads(backup_str)
-    except Exception as e:
-        print(f"Failed to load backup: {e}")
-    return None
 
 # SSE connection management
 class SSEManager:
@@ -105,6 +79,446 @@ def get_db_connection():
 
 def init_database():
     """Initialize database tables"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Create player_points table with wins and knockouts
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS player_points (
+                player_name VARCHAR(100) PRIMARY KEY,
+                total_points DECIMAL(10,2) DEFAULT 0,
+                avatar VARCHAR(50) DEFAULT '',
+                tournaments_played INTEGER DEFAULT 0,
+                wins INTEGER DEFAULT 0,
+                knockouts INTEGER DEFAULT 0,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create points_history table for audit trail
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS points_history (
+                id SERIAL PRIMARY KEY,
+                player_name VARCHAR(100),
+                tournament_date VARCHAR(50),
+                points_change DECIMAL(10,2),
+                action_type VARCHAR(50),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create tournament_results table for persistent awards storage
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS tournament_results (
+                id SERIAL PRIMARY KEY,
+                tournament_date VARCHAR(100),
+                tournament_id VARCHAR(50),
+                total_players INTEGER,
+                awards JSONB,
+                preparation_h_club JSONB,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+
+def get_all_player_points():
+    """Get all player points ordered by total"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute('''
+            SELECT player_name, total_points, avatar, tournaments_played, wins, knockouts
+            FROM player_points
+            ORDER BY total_points DESC
+        ''')
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        return results
+    except Exception as e:
+        print(f"Error fetching player points: {e}")
+        return []
+
+def update_player_points(player_name: str, points: float, wins: int, kos: int, tournament_date: str):
+    """Add points, wins, and KOs to player's total"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Upsert player points
+        cur.execute('''
+            INSERT INTO player_points (player_name, total_points, wins, knockouts, tournaments_played)
+            VALUES (%s, %s, %s, %s, 1)
+            ON CONFLICT (player_name) 
+            DO UPDATE SET 
+                total_points = player_points.total_points + %s,
+                wins = player_points.wins + %s,
+                knockouts = player_points.knockouts + %s,
+                tournaments_played = player_points.tournaments_played + 1,
+                last_updated = CURRENT_TIMESTAMP
+        ''', (player_name, points, wins, kos, points, wins, kos))
+        
+        # Record in history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            VALUES (%s, %s, %s, 'tournament_result')
+        ''', (player_name, tournament_date, points))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error updating player points: {e}")
+        return False
+
+def edit_player_points(player_name: str, new_total: float, reason: str):
+    """Manually edit player's total points"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get current points
+        cur.execute('SELECT total_points FROM player_points WHERE player_name = %s', (player_name,))
+        result = cur.fetchone()
+        old_total = result[0] if result else 0
+        
+        # Update total
+        cur.execute('''
+            INSERT INTO player_points (player_name, total_points)
+            VALUES (%s, %s)
+            ON CONFLICT (player_name)
+            DO UPDATE SET total_points = %s, last_updated = CURRENT_TIMESTAMP
+        ''', (player_name, new_total, new_total))
+        
+        # Record in history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            VALUES (%s, %s, %s, %s)
+        ''', (player_name, reason, new_total - old_total, 'manual_edit'))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error editing player points: {e}")
+        return False
+
+def reset_all_points():
+    """Reset all player points to zero"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Archive current data to history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            SELECT player_name, 'season_reset', -total_points, 'season_reset'
+            FROM player_points
+            WHERE total_points > 0
+        ''')
+        
+        # Reset all points
+        cur.execute('UPDATE player_points SET total_points = 0, wins = 0, knockouts = 0, tournaments_played = 0')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error resetting points: {e}")
+        return False
+
+def save_tournament_results(data):
+    """Save tournament results to PostgreSQL"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Delete old result (keep only latest)
+        cur.execute('DELETE FROM tournament_results')
+        
+        # Insert new result
+        cur.execute('''
+            INSERT INTO tournament_results (tournament_date, tournament_id, total_players, awards, preparation_h_club)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (
+            data.get("tournament_date"),
+            data.get("tournament_id"),
+            data.get("total_players"),
+            json.dumps(data.get("awards", {})),
+            json.dumps(data.get("preparation_h_club", []))
+        ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Tournament results saved to PostgreSQL")
+        return True
+    except Exception as e:
+        print(f"Error saving tournament results: {e}")
+        return False
+
+def load_tournament_results():
+    """Load tournament results from PostgreSQL"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute('''
+            SELECT tournament_date, tournament_id, total_players, awards, preparation_h_club, last_updated
+            FROM tournament_results
+            ORDER BY last_updated DESC
+            LIMIT 1
+        ''')
+        
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if result:
+            return {
+                "tournament_date": result["tournament_date"],
+                "tournament_id": result["tournament_id"],
+                "total_players": result["total_players"],
+                "awards": result["awards"],  # Already parsed from JSONB
+                "preparation_h_club": result["preparation_h_club"],  # Already parsed from JSONB
+                "last_updated": result["last_updated"].isoformat()
+            }
+        
+        return None
+    except Exception as e:
+        print(f"Error loading tournament results: {e}")
+        return None
+
+# Initialize database on startup
+if DATABASE_URL:
+    init_database()
+else:
+    print("WARNING: DATABASE_URL not set - database features disabled")
+
+# Awards calculation logic (unchanged)
+class PokerAwardsParser:
+    def parse_txt(self, content: bytes) -> Dict[str, Any]:
+        """Parse poker text file and calculate awards"""
+        try:
+            print(f"Starting to parse file of size: {len(content)} bytes")
+            players_data = self._extract_from_txt(content)
+            print(f"Extracted data for {len([k for k in players_data.keys() if k != 'tournament_info'])} players")
+            awards = self._calculate_awards(players_data)
+            print(f"Calculated {len(awards)} awards")
+            
+            # Extract tournament info from players_data if available
+            tournament_info = players_data.get('tournament_info', {})
+            
+            # Extract bad beat victims for separate section
+            preparation_h_club = self._extract_preparation_h_club(players_data)
+            
+            result = {
+                "tournament_date": tournament_info.get('date', datetime.now().strftime("%B %d, %Y at %I:%M %p")),
+                "tournament_id": tournament_info.get('id', 'Unknown'),
+                "total_players": tournament_info.get('player_count', len([p for p in players_data if p != 'tournament_info'])),
+                "awards": awards,
+                "preparation_h_club": preparation_h_club,
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            return result
+        except Exception as e:
+            print(f"Error parsing text file: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._generate_sample_data()
+    
+    def _extract_preparation_h_club(self, players_data: Dict[str, Dict]) -> List[Dict]:
+        """Extract bad beat victims for the Preparation H Club section"""
+        preparation_h_club = []
+        
+        # Filter out tournament_info
+        players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
+        
+        for player_name, player_data in players.items():
+            bad_beats = player_data.get('bad_beats', [])
+            for bad_beat in bad_beats:
+                preparation_h_club.append({
+                    'victim': player_name,
+                    'victim_hand': bad_beat['victim_hand'],
+                    'winner': bad_beat['winner'],
+                    'winner_hand': bad_beat['winner_hand'],
+                    'description': bad_beat['description']
+                })
+        
+        print(f"DEBUG: Created Preparation H Club with {len(preparation_h_club)} bad beats")
+        return preparation_h_club
+    
+    def _extract_from_txt(self, content: bytes):
+        """Extract player data from PokerStars text file"""
+        # Convert bytes to text
+        text = content.decode('utf-8')
+        print(f"File content length: {len(text)} characters")
+        print(f"First 200 characters: {text[:200]}")
+        
+        # Initialize data structures
+        players = {}
+        tournament_info = {}
+        
+        # Extract tournament information
+        tournament_match = re.search(r'Tournament #(\d+)', text)
+        if tournament_match:
+            tournament_info['id'] = tournament_match.group(1)
+            print(f"Found tournament ID: {tournament_info['id']}")
+        else:
+            print("No tournament ID found")
+        
+        date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', text)
+        if date_match:
+            tournament_info['date'] = date_match.group(1)
+            print(f"Found tournament date: {tournament_info['date']}")
+        
+        # FIXED REGEX - Extract all hands using PokerStars format
+        hands = re.findall(r'(PokerStars Hand #\d+: Tournament #\d+.*?)(?=PokerStars Hand #\d+: Tournament #\d+|\Z)', text, re.DOTALL)
+        print(f"Found {len(hands)} hands")
+        
+        # Debug: Check how many hands have showdowns
+        showdown_count = 0
+        for hand in hands:
+            if '*** SHOW DOWN ***' in hand:
+                showdown_count += 1
+        print(f"DEBUG: Found {showdown_count} hands with showdowns out of {len(hands)} total hands")
+        
+        if len(hands) > 0:
+            print(f"First hand preview: {hands[0][:150]}...")
+        else:
+            print("WARNING: No hands found! File may not be in PokerStars tournament format")
+            print("Looking for pattern starting with 'PokerStars Hand #'")
+            # Try to find any PokerStars Hand mentions
+            hand_mentions = re.findall(r'PokerStars Hand #\d+', text)
+            print(f"Found {len(hand_mentions)} PokerStars Hand mentions")
+            if hand_mentions:
+                print(f"Example: {hand_mentions[0]}")
+        
+        for i, hand_text in enumerate(hands):
+            if i < 3:  # Debug first few hands
+                print(f"Processing hand {i+1}")
+                # Check if this hand has a showdown
+                if '*** SHOW DOWN ***' in hand_text:
+                    print(f"DEBUG: Hand {i+1} contains a showdown")
+                else:
+                    print(f"DEBUG: Hand {i+1} has no showdown")
+            self._parse_hand(hand_text, players)
+        
+        # Calculate final positions from chip counts and eliminations
+        self._determine_final_positions(players, text)
+        
+        # Count total unique players
+        tournament_info['player_count'] = len(players)
+        print(f"Final player count: {tournament_info['player_count']}")
+        
+        # Store tournament info in the players dict for easy access
+        players['tournament_info'] = tournament_info
+        
+        return players
+    
+    def _parse_hand(self, hand_text: str, players: Dict):
+        """Parse individual hand and update player statistics"""
+        # Extract players and their actions
+        seat_pattern = r'Seat \d+: (\w+(?:\*\d+)?)\s*\((\d+) in chips\)'
+        seats = re.findall(seat_pattern, hand_text)
+        
+        for player_name, chips in seats:
+            if player_name not in players:
+                players[player_name] = {
+                    'hands_played': 0,
+                    'raises': 0,
+                    'calls': 0,
+                    'folds': 0,
+                    'bets': 0,
+                    'checks': 0,
+                    'showdowns': 0,
+                    'showdown_wins': 0,
+                    'total_won': 0,
+                    'total_bet': 0,
+                    'aggressive_actions': 0,
+                    'passive_actions': 0,
+                    'hands_voluntarily_played': 0,
+                    'final_position': None,
+                    'max_chips': int(chips),
+                    'bad_beats': [],
+                    'suckouts': []
+                }
+            
+            players[player_name]['hands_played'] += 1
+            players[player_name]['max_chips'] = max(players[player_name]['max_chips'], int(chips))
+        
+        # Analyze showdowns for bad beats
+        if '*** SHOW DOWN ***' in hand_text:
+            self._analyze_showdown_for_bad_beats(hand_text, players)
+        
+        # Count actions for each player
+        action_patterns = {
+            'raises': r'(\w+(?:\*\d+)?): raises',
+            'calls': r'(\w+(?:\*\d+)?): calls',
+            'folds': r'(\w+(?:\*\d+)?): folds',
+            'bets': r'(\w+(?:\*\d+)?): bets',
+            'checks': r'(\w+(?:\*\d+)?): checks'
+        }
+        
+        for action_type, pattern in action_patterns.items():
+            matches = re.findall(pattern, hand_text)
+            for player in matches:
+                if player in players:
+                    players[player][action_type] += 1
+                    
+                    # Track aggressive vs passive actions
+                    if action_type in ['raises', 'bets']:
+                        players[player]['aggressive_actions'] += 1
+                    elif action_type in ['calls', 'checks']:
+                        players[player]['passive_actions'] += 1
+        
+        # Track voluntary play (not in blinds)
+        voluntary_pattern = r'(\w+(?:\*\d+)?): (?:raises|calls|folds)(?! before Flop)'
+        voluntary_players = set(re.findall(voluntary_pattern, hand_text))
+        for player in voluntary_players:
+            if player in players:
+                players[player]['hands_voluntarily_played'] += 1
+        
+        # Track showdowns
+        if '*** SHOW DOWN ***' in hand_text:
+            showdown_pattern = r'(\w+(?:\*\d+)?): shows.*?and (won|lost)'
+            showdown_matches = re.findall(showdown_pattern, hand_text)
+            for player, result in showdown_matches:
+                if player in players:
+                    players[player]['showdowns'] += 1
+                    if result == 'won':
+                        players[player]['showdown_wins'] += 1
+        
+        # Track winnings
+        collected_pattern = r'(\w+(?:\*\d+)?) collected (\d+) from pot'
+        collected_matches = re.findall(collected_pattern, hand_text)
+        for player, amount in collected_matches:
+            if player in players:
+                players[player]['total_won'] += int(amount)
+    
+    def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
+        """Analyze showdown hands to detect genuine bad beats"""
+        try:
+            if '*** SHOW DOWN ***' not in hand_text:
+                return
+                
+            # Extract showdown section
+            showdown_section = hand_text.split('*** SHOW DOWN ***')[1]
+            
+            # Find all players who showed hands
+            showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
+            sh    """Initialize database tables"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
