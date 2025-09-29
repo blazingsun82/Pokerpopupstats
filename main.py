@@ -508,372 +508,6 @@ class PokerAwardsParser:
                 players[player]['total_won'] += int(amount)
     
     def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
-        """Analyze showdown hands to detect genuine bad beats"""
-        try:
-            if '*** SHOW DOWN ***' not in hand_text:
-                return
-                
-            # Extract showdown section
-            showdown_section = hand_text.split('*** SHOW DOWN ***')[1]
-            
-            # Find all players who showed hands
-            showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
-            sh    """Initialize database tables"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Create player_points table with PostgreSQL syntax
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS player_points (
-                player_name VARCHAR(100) PRIMARY KEY,
-                total_points DECIMAL(10,2) DEFAULT 0,
-                avatar VARCHAR(50) DEFAULT '',
-                tournaments_played INTEGER DEFAULT 0,
-                wins INTEGER DEFAULT 0,
-                knockouts INTEGER DEFAULT 0,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create points_history table for audit trail
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS points_history (
-                id SERIAL PRIMARY KEY,
-                player_name VARCHAR(100),
-                tournament_date VARCHAR(50),
-                points_change DECIMAL(10,2),
-                action_type VARCHAR(50),
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("Database initialized successfully")
-    except Exception as e:
-        print(f"Database initialization error: {e}")
-
-def get_all_player_points():
-    """Get all player points ordered by total"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute('''
-            SELECT player_name, total_points, avatar, tournaments_played, wins, knockouts
-            FROM player_points
-            ORDER BY total_points DESC
-        ''')
-        results = cur.fetchall()
-        cur.close()
-        conn.close()
-        return results
-    except Exception as e:
-        print(f"Error fetching player points: {e}")
-        return []
-
-def update_player_points(player_name: str, points: float, wins: int, kos: int, tournament_date: str):
-    """Add points, wins, and KOs to player's total"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Upsert player points
-        cur.execute('''
-            INSERT INTO player_points (player_name, total_points, wins, knockouts, tournaments_played)
-            VALUES (%s, %s, %s, %s, 1)
-            ON CONFLICT (player_name) 
-            DO UPDATE SET 
-                total_points = player_points.total_points + %s,
-                wins = player_points.wins + %s,
-                knockouts = player_points.knockouts + %s,
-                tournaments_played = player_points.tournaments_played + 1,
-                last_updated = CURRENT_TIMESTAMP
-        ''', (player_name, points, wins, kos, points, wins, kos))
-        
-        # Record in history
-        cur.execute('''
-            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
-            VALUES (%s, %s, %s, 'tournament_result')
-        ''', (player_name, tournament_date, points))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"Error updating player points: {e}")
-        return False
-
-def edit_player_points(player_name: str, new_total: float, reason: str):
-    """Manually edit player's total points"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Get current points
-        cur.execute('SELECT total_points FROM player_points WHERE player_name = %s', (player_name,))
-        result = cur.fetchone()
-        old_total = result[0] if result else 0
-        
-        # Update total
-        cur.execute('''
-            INSERT INTO player_points (player_name, total_points)
-            VALUES (%s, %s)
-            ON CONFLICT (player_name)
-            DO UPDATE SET total_points = %s, last_updated = CURRENT_TIMESTAMP
-        ''', (player_name, new_total, new_total))
-        
-        # Record in history
-        cur.execute('''
-            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
-            VALUES (%s, %s, %s, %s)
-        ''', (player_name, reason, new_total - old_total, 'manual_edit'))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"Error editing player points: {e}")
-        return False
-
-def reset_all_points():
-    """Reset all player points to zero"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Archive current data to history
-        cur.execute('''
-            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
-            SELECT player_name, 'season_reset', -total_points, 'season_reset'
-            FROM player_points
-            WHERE total_points > 0
-        ''')
-        
-        # Reset all points
-        cur.execute('UPDATE player_points SET total_points = 0, wins = 0, knockouts = 0, tournaments_played = 0')
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"Error resetting points: {e}")
-        return False
-
-# Initialize database on startup
-if DATABASE_URL:
-    init_database()
-else:
-    print("WARNING: DATABASE_URL not set - points tracking disabled")
-
-# Awards calculation logic
-class PokerAwardsParser:
-    def parse_txt(self, content: bytes) -> Dict[str, Any]:
-        """Parse poker text file and calculate awards"""
-        try:
-            print(f"Starting to parse file of size: {len(content)} bytes")
-            players_data = self._extract_from_txt(content)
-            print(f"Extracted data for {len([k for k in players_data.keys() if k != 'tournament_info'])} players")
-            awards = self._calculate_awards(players_data)
-            print(f"Calculated {len(awards)} awards")
-            
-            # Extract tournament info from players_data if available
-            tournament_info = players_data.get('tournament_info', {})
-            
-            # Extract bad beat victims for separate section
-            preparation_h_club = self._extract_preparation_h_club(players_data)
-            
-            result = {
-                "tournament_date": tournament_info.get('date', datetime.now().strftime("%B %d, %Y at %I:%M %p")),
-                "tournament_id": tournament_info.get('id', 'Unknown'),
-                "total_players": tournament_info.get('player_count', len([p for p in players_data if p != 'tournament_info'])),
-                "awards": awards,
-                "preparation_h_club": preparation_h_club,
-                "last_updated": datetime.now().isoformat()
-            }
-            
-            return result
-        except Exception as e:
-            print(f"Error parsing text file: {e}")
-            import traceback
-            traceback.print_exc()
-            return self._generate_sample_data()
-    
-    def _extract_preparation_h_club(self, players_data: Dict[str, Dict]) -> List[Dict]:
-        """Extract bad beat victims for the Preparation H Club section"""
-        preparation_h_club = []
-        
-        # Filter out tournament_info
-        players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
-        
-        for player_name, player_data in players.items():
-            bad_beats = player_data.get('bad_beats', [])
-            for bad_beat in bad_beats:
-                preparation_h_club.append({
-                    'victim': player_name,
-                    'victim_hand': bad_beat['victim_hand'],
-                    'winner': bad_beat['winner'],
-                    'winner_hand': bad_beat['winner_hand'],
-                    'description': bad_beat['description']
-                })
-        
-        print(f"DEBUG: Created Preparation H Club with {len(preparation_h_club)} bad beats")
-        return preparation_h_club
-    
-    def _extract_from_txt(self, content: bytes):
-        """Extract player data from PokerStars text file"""
-        # Convert bytes to text
-        text = content.decode('utf-8')
-        print(f"File content length: {len(text)} characters")
-        print(f"First 200 characters: {text[:200]}")
-        
-        # Initialize data structures
-        players = {}
-        tournament_info = {}
-        
-        # Extract tournament information
-        tournament_match = re.search(r'Tournament #(\d+)', text)
-        if tournament_match:
-            tournament_info['id'] = tournament_match.group(1)
-            print(f"Found tournament ID: {tournament_info['id']}")
-        else:
-            print("No tournament ID found")
-        
-        date_match = re.search(r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})', text)
-        if date_match:
-            tournament_info['date'] = date_match.group(1)
-            print(f"Found tournament date: {tournament_info['date']}")
-        
-        # FIXED REGEX - Extract all hands using PokerStars format
-        hands = re.findall(r'(PokerStars Hand #\d+: Tournament #\d+.*?)(?=PokerStars Hand #\d+: Tournament #\d+|\Z)', text, re.DOTALL)
-        print(f"Found {len(hands)} hands")
-        
-        # Debug: Check how many hands have showdowns
-        showdown_count = 0
-        for hand in hands:
-            if '*** SHOW DOWN ***' in hand:
-                showdown_count += 1
-        print(f"DEBUG: Found {showdown_count} hands with showdowns out of {len(hands)} total hands")
-        
-        if len(hands) > 0:
-            print(f"First hand preview: {hands[0][:150]}...")
-        else:
-            print("WARNING: No hands found! File may not be in PokerStars tournament format")
-            print("Looking for pattern starting with 'PokerStars Hand #'")
-            # Try to find any PokerStars Hand mentions
-            hand_mentions = re.findall(r'PokerStars Hand #\d+', text)
-            print(f"Found {len(hand_mentions)} PokerStars Hand mentions")
-            if hand_mentions:
-                print(f"Example: {hand_mentions[0]}")
-        
-        for i, hand_text in enumerate(hands):
-            if i < 3:  # Debug first few hands
-                print(f"Processing hand {i+1}")
-                # Check if this hand has a showdown
-                if '*** SHOW DOWN ***' in hand_text:
-                    print(f"DEBUG: Hand {i+1} contains a showdown")
-                else:
-                    print(f"DEBUG: Hand {i+1} has no showdown")
-            self._parse_hand(hand_text, players)
-        
-        # Calculate final positions from chip counts and eliminations
-        self._determine_final_positions(players, text)
-        
-        # Count total unique players
-        tournament_info['player_count'] = len(players)
-        print(f"Final player count: {tournament_info['player_count']}")
-        
-        # Store tournament info in the players dict for easy access
-        players['tournament_info'] = tournament_info
-        
-        return players
-    
-    def _parse_hand(self, hand_text: str, players: Dict):
-        """Parse individual hand and update player statistics"""
-        # Extract players and their actions
-        seat_pattern = r'Seat \d+: (\w+(?:\*\d+)?)\s*\((\d+) in chips\)'
-        seats = re.findall(seat_pattern, hand_text)
-        
-        for player_name, chips in seats:
-            if player_name not in players:
-                players[player_name] = {
-                    'hands_played': 0,
-                    'raises': 0,
-                    'calls': 0,
-                    'folds': 0,
-                    'bets': 0,
-                    'checks': 0,
-                    'showdowns': 0,
-                    'showdown_wins': 0,
-                    'total_won': 0,
-                    'total_bet': 0,
-                    'aggressive_actions': 0,
-                    'passive_actions': 0,
-                    'hands_voluntarily_played': 0,
-                    'final_position': None,
-                    'max_chips': int(chips),
-                    'bad_beats': [],
-                    'suckouts': []
-                }
-            
-            players[player_name]['hands_played'] += 1
-            players[player_name]['max_chips'] = max(players[player_name]['max_chips'], int(chips))
-        
-        # Analyze showdowns for bad beats
-        if '*** SHOW DOWN ***' in hand_text:
-            print(f"DEBUG: Found showdown in hand")
-            self._analyze_showdown_for_bad_beats(hand_text, players)
-        
-        # Count actions for each player
-        action_patterns = {
-            'raises': r'(\w+(?:\*\d+)?): raises',
-            'calls': r'(\w+(?:\*\d+)?): calls',
-            'folds': r'(\w+(?:\*\d+)?): folds',
-            'bets': r'(\w+(?:\*\d+)?): bets',
-            'checks': r'(\w+(?:\*\d+)?): checks'
-        }
-        
-        for action_type, pattern in action_patterns.items():
-            matches = re.findall(pattern, hand_text)
-            for player in matches:
-                if player in players:
-                    players[player][action_type] += 1
-                    
-                    # Track aggressive vs passive actions
-                    if action_type in ['raises', 'bets']:
-                        players[player]['aggressive_actions'] += 1
-                    elif action_type in ['calls', 'checks']:
-                        players[player]['passive_actions'] += 1
-        
-        # Track voluntary play (not in blinds)
-        voluntary_pattern = r'(\w+(?:\*\d+)?): (?:raises|calls|folds)(?! before Flop)'
-        voluntary_players = set(re.findall(voluntary_pattern, hand_text))
-        for player in voluntary_players:
-            if player in players:
-                players[player]['hands_voluntarily_played'] += 1
-        
-        # Track showdowns
-        if '*** SHOW DOWN ***' in hand_text:
-            showdown_pattern = r'(\w+(?:\*\d+)?): shows.*?and (won|lost)'
-            showdown_matches = re.findall(showdown_pattern, hand_text)
-            for player, result in showdown_matches:
-                if player in players:
-                    players[player]['showdowns'] += 1
-                    if result == 'won':
-                        players[player]['showdown_wins'] += 1
-        
-        # Track winnings
-        collected_pattern = r'(\w+(?:\*\d+)?) collected (\d+) from pot'
-        collected_matches = re.findall(collected_pattern, hand_text)
-        for player, amount in collected_matches:
-            if player in players:
-                players[player]['total_won'] += int(amount)
-    
-    def _analyze_showdown_for_bad_beats(self, hand_text: str, players: Dict):
         """Analyze showdown hands to detect genuine bad beats - when strong made hands lose"""
         try:
             if '*** SHOW DOWN ***' not in hand_text:
@@ -881,21 +515,32 @@ class PokerAwardsParser:
                 
             # Extract showdown section
             showdown_section = hand_text.split('*** SHOW DOWN ***')[1]
-            print(f"DEBUG: Found showdown section: {showdown_section[:200]}...")
             
             # Find all players who showed hands
             showdown_pattern = r'(\w+(?:\*\d+)?): shows \[([^\]]+)\] \(([^)]+)\)'
             showdown_matches = re.findall(showdown_pattern, showdown_section)
             
-            # Find who won the pot
+            # Find who won the pot (IMPORTANT: Check for split pots)
             winner_pattern = r'(\w+(?:\*\d+)?) collected (\d+) from pot'
-            winner_match = re.search(winner_pattern, hand_text)
-            winner = winner_match.group(1) if winner_match else None
+            winner_matches = re.findall(winner_pattern, hand_text)
             
-            print(f"DEBUG: Showdown found - {len(showdown_matches)} players showed hands, winner: {winner}")
+            # If multiple winners, it's a split pot - NO BAD BEAT POSSIBLE
+            if len(winner_matches) > 1:
+                print(f"DEBUG: Split pot detected - no bad beat possible")
+                return
             
-            # Only analyze hands where both players showed (for clear bad beat identification)
-            if len(showdown_matches) >= 2 and winner:
+            # Single winner required for bad beat
+            winner = winner_matches[0][0] if winner_matches else None
+            
+            # Check for explicit split pot language
+            if any(phrase in hand_text.lower() for phrase in ['split pot', 'divided', 'tied']):
+                print(f"DEBUG: Split pot language detected - no bad beat")
+                return
+            
+            print(f"DEBUG: Single winner showdown - {len(showdown_matches)} players showed hands, winner: {winner}")
+            
+            # Only analyze hands where players showed AND there's a clear single winner
+            if len(showdown_matches) >= 2 and winner and len(winner_matches) == 1:
                 player_hands = []
                 for player, cards, hand_desc in showdown_matches:
                     try:
@@ -907,17 +552,17 @@ class PokerAwardsParser:
                             'made_hand_strength': made_hand_strength,
                             'won': player == winner
                         })
-                        print(f"DEBUG: {player} showed {cards} ({hand_desc}) - made hand strength: {made_hand_strength}")
+                        print(f"DEBUG: {player} showed {cards} ({hand_desc}) - strength: {made_hand_strength}")
                     except Exception as e:
                         print(f"DEBUG: Error processing player {player}: {e}")
                         continue
                 
-                # Find strong hands that lost
+                # Find strong hands that LOST (not tied)
                 losing_hands = [h for h in player_hands if not h['won']]
                 winning_hand = next((h for h in player_hands if h['won']), None)
                 
                 if losing_hands and winning_hand:
-                    # Check for genuine bad beats - strong made hands losing to weaker ones or miracle draws
+                    # Check for genuine bad beats - strong made hands losing to stronger ones
                     for losing_hand in losing_hands:
                         try:
                             if self._is_genuine_bad_beat(losing_hand, winning_hand):
@@ -960,46 +605,29 @@ class PokerAwardsParser:
             return
     
     def _evaluate_made_hand_strength(self, hand_description: str) -> int:
-        """Evaluate the strength of a made hand for bad beat detection"""
+        """Evaluate the strength of a made hand"""
         hand_desc = hand_description.lower()
         
-        # Royal flush and straight flush
         if 'royal flush' in hand_desc:
             return 1000
         elif 'straight flush' in hand_desc:
             return 900
-        
-        # Four of a kind (quads)
         elif 'four of a kind' in hand_desc:
             return 800
-        
-        # Full house
         elif 'full house' in hand_desc:
             return 700
-        
-        # Flush
         elif 'flush' in hand_desc and 'straight' not in hand_desc:
             return 600
-        
-        # Straight
         elif 'straight' in hand_desc and 'flush' not in hand_desc:
             return 500
-        
-        # Three of a kind (trips/set)
         elif 'three of a kind' in hand_desc:
             return 400
-        
-        # Two pair
         elif 'two pair' in hand_desc:
-            # Strong two pair (high cards)
             if any(card in hand_desc for card in ['aces', 'kings', 'queens']):
                 return 300
             else:
                 return 200
-        
-        # One pair
         elif 'pair of' in hand_desc:
-            # High pairs are stronger
             if 'aces' in hand_desc:
                 return 150
             elif 'kings' in hand_desc:
@@ -1010,8 +638,6 @@ class PokerAwardsParser:
                 return 120
             else:
                 return 100
-        
-        # High card
         else:
             return 50
     
@@ -1020,16 +646,9 @@ class PokerAwardsParser:
         loser_strength = losing_hand['made_hand_strength']
         winner_strength = winning_hand['made_hand_strength']
         
-        # Bad beat criteria:
-        # 1. Loser had a reasonably strong hand (trips or better)
-        # 2. Winner had a stronger hand but got there with luck
-        # 3. OR loser had very strong hand (full house+) and lost to anything better
-        
-        # Strong hands that should qualify as bad beat victims
         if loser_strength >= 400:  # Three of a kind or better
             return True
         
-        # Very strong two pair can be bad beats too
         if loser_strength >= 300 and winner_strength > loser_strength:
             return True
         
@@ -1044,7 +663,6 @@ class PokerAwardsParser:
         elif 'straight flush' in desc:
             return 'straight flush'
         elif 'four of a kind' in desc:
-            # Extract the rank
             if 'aces' in desc:
                 return 'quad aces'
             elif 'kings' in desc:
@@ -1082,23 +700,14 @@ class PokerAwardsParser:
             return 'pocket jacks'
         elif 'pair of' in desc:
             return 'a pair'
+        else:
+            return 'high card'
     
     def _is_likely_runner_runner(self, description: str, suckout_info: Dict) -> bool:
-        """Determine if this was likely a runner-runner (backdoor) win"""
-        # This is a simplified check - in a real implementation, we'd need to parse
-        # the actual board texture and hole cards to definitively identify runner-runner
-        
-        # Look for patterns that suggest backdoor draws
-        runner_runner_indicators = [
-            'flush' in description and 'straight' not in description,  # Backdoor flush
-            'straight' in description and 'flush' not in description,  # Backdoor straight
-        ]
-        
-        # Check if the winning hand type suggests a possible runner-runner
+        """Determine if this was likely a runner-runner win"""
         winning_hand = suckout_info.get('winning_hand', '').lower()
         victim_hand = suckout_info.get('victim_hand', '').lower()
         
-        # Simple heuristic: if winner made flush/straight and victim had pair/two pair
         if ('flush' in winning_hand and ('pair' in victim_hand or 'two pair' in victim_hand)):
             return True
         elif ('straight' in winning_hand and ('pair' in victim_hand or 'two pair' in victim_hand)):
@@ -1106,45 +715,8 @@ class PokerAwardsParser:
             
         return False
     
-    def _evaluate_preflop_strength(self, hole_cards: str) -> int:
-        """Evaluate pre-flop hand strength - kept for compatibility"""
-        cards = hole_cards.strip().split()
-        if len(cards) != 2:
-            return 0
-        
-        # Parse cards
-        card1_rank = cards[0][0] if len(cards[0]) > 0 else '2'
-        card2_rank = cards[1][0] if len(cards[1]) > 0 else '2'
-        
-        # Convert face cards to numbers for easier comparison
-        rank_values = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, 
-                      '9': 9, 'T': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14}
-        
-        val1 = rank_values.get(card1_rank, 0)
-        val2 = rank_values.get(card2_rank, 0)
-        
-        if val1 == val2:  # Pair
-            if val1 >= 13:  # AA, KK
-                return 100
-            elif val1 >= 11:  # QQ, JJ
-                return 90
-            elif val1 >= 9:   # TT, 99
-                return 80
-            else:
-                return 70
-        
-        # Non-pair hands
-        high_card = max(val1, val2)
-        if high_card == 14:  # Ace high
-            return 80
-        elif high_card >= 12:  # King or Queen high
-            return 60
-        else:
-            return 40
-    
     def _determine_final_positions(self, players: Dict, full_text: str):
         """Determine final tournament positions"""
-        # Use chip counts as a proxy for positions
         chip_counts = [(name, data['max_chips']) for name, data in players.items() 
                       if name != 'tournament_info']
         chip_counts.sort(key=lambda x: x[1], reverse=True)
@@ -1154,14 +726,11 @@ class PokerAwardsParser:
     
     def _calculate_awards(self, players_data: Dict[str, Dict]) -> Dict[str, Dict]:
         """Calculate fun club-style awards from parsed player data"""
-        # Filter out tournament_info
         players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
         
         if not players:
-            print("No players found, returning sample awards")
             return self._get_sample_awards()
         
-        print(f"Calculating awards for {len(players)} players")
         awards = {}
         
         # Tournament Champion (1st place)
@@ -1180,25 +749,6 @@ class PokerAwardsParser:
                 "winner": second_place[0],
                 "description": "So close to glory, yet so far",
                 "stat": "Heads-up warrior"
-            }
-        
-        # Runner-Runner Win
-        runner_runner_players = []
-        for name, data in players.items():
-            suckouts = data.get('suckouts', [])
-            for suckout in suckouts:
-                description = suckout.get('description', '').lower()
-                if self._is_likely_runner_runner(description, suckout):
-                    runner_runner_players.append((name, suckout))
-        
-        if runner_runner_players:
-            best_runner_runner = runner_runner_players[0]
-            player_name = best_runner_runner[0]
-            
-            awards["🎯 Runner-Runner Win"] = {
-                "winner": player_name,
-                "description": "Needed both turn and river cards to complete their hand",
-                "stat": f"Hit the perfect two-card combination to win"
             }
         
         # Most Aggressive
@@ -1223,17 +773,99 @@ class PokerAwardsParser:
                 "stat": "The human slot machine"
             }
         
-        # Tightest Player
+        # Tightest Player (CORRECTED DESCRIPTION)
         if aggressive_players:
             tightest = min(aggressive_players,
                          key=lambda x: x[1]['hands_voluntarily_played'] / max(x[1]['hands_played'], 1))
-            awards["🧊 Tightest (Rock Award)"] = {
+            awards["🧊 Tightest Player"] = {
                 "winner": tightest[0],
-                "description": "Waited patiently for the premiums",
-                "stat": "Classic rock-solid play"
+                "description": "Plays only a small, selective number of hands and is not afraid to be aggressive with premium holdings",
+                "stat": "Classic tight-aggressive strategy"
             }
         
-        # Donkey
+        # YOLO Award - Biggest pot won with worst starting hand
+        yolo_candidates = []
+        for name, data in players.items():
+            suckouts = data.get('suckouts', [])
+            for suckout in suckouts:
+                # Look for really bad starting hands that won big pots
+                description = suckout.get('description', '').lower()
+                if any(bad_hand in description for bad_hand in ['7', '2', 'offsuit', 'unsuited']):
+                    yolo_candidates.append((name, suckout))
+        
+        if yolo_candidates:
+            # Pick the most impressive bad hand win
+            yolo_winner = yolo_candidates[0]
+            awards["🎲 YOLO Award"] = {
+                "winner": yolo_winner[0],
+                "description": "Biggest pot won with the worst starting hand",
+                "stat": "Sometimes you gotta risk it all"
+            }
+        
+        # Comeback Kid - Largest comeback from smallest chip stack
+        comeback_candidates = []
+        min_chips = min(data.get('max_chips', 0) for data in players.values())
+        
+        for name, data in players.items():
+            # Look for players who had very low chips but finished well
+            final_pos = data.get('final_position', len(players))
+            if data.get('max_chips', 0) <= min_chips * 2 and final_pos <= len(players) // 2:
+                comeback_score = (len(players) - final_pos) / max(data.get('max_chips', 1), 1)
+                comeback_candidates.append((name, data, comeback_score))
+        
+        if comeback_candidates:
+            comeback_candidates.sort(key=lambda x: x[2], reverse=True)
+            comeback_king = comeback_candidates[0]
+            awards["🎯 Comeback Kid"] = {
+                "winner": comeback_king[0],
+                "description": "Largest comeback from the smallest chip stack",
+                "stat": "Rose from the ashes like a phoenix"
+            }
+        
+        # Doggy Paddling Award - Consistently at bottom but survives
+        survivors = [(name, data) for name, data in players.items() 
+                    if data.get('final_position', 999) > len(players) * 0.6]  # Bottom 40%
+        
+        if survivors:
+            # Find player who lasted longest despite being consistently low
+            longest_survivor = max(survivors, 
+                                 key=lambda x: x[1].get('hands_played', 0))
+            awards["🐶💦 Doggy Paddling Award"] = {
+                "winner": longest_survivor[0],
+                "description": "Consistently hovers at the bottom but somehow stays alive longer than expected",
+                "stat": "Survival instincts kicked in"
+            }
+        
+        # Hollywood Actor (renamed from Biggest Bluffer)
+        bluffer_candidates = [(name, data) for name, data in players.items() 
+                            if data.get('bets', 0) > 2]
+        if bluffer_candidates:
+            hollywood_actor = max(bluffer_candidates,
+                                key=lambda x: x[1]['bets'] / max(x[1].get('showdowns', 1), 1))
+            awards["🎭 Hollywood Actor"] = {
+                "winner": hollywood_actor[0],
+                "description": "Most bluffs attempted (successful or failed)",
+                "stat": "Master of deception and theatrics"
+            }
+        
+        # 7-2 Special Award
+        bad_hand_winners = []
+        for name, data in players.items():
+            suckouts = data.get('suckouts', [])
+            for suckout in suckouts:
+                winning_hand = suckout.get('winning_hand', '').lower()
+                # Look specifically for 7-2 combinations
+                if ('7' in winning_hand and '2' in winning_hand) or 'worst' in winning_hand.lower():
+                    bad_hand_winners.append((name, suckout))
+        
+        if bad_hand_winners:
+            awards["💩 7-2 Hero"] = {
+                "winner": bad_hand_winners[0][0],
+                "description": "Won with the infamous 7-2 offsuit",
+                "stat": "Turned trash into treasure"
+            }
+        
+        # Donkey (poor decision making)
         donkey_candidates = []
         for name, data in players.items():
             if data['hands_played'] > 10:
@@ -1268,18 +900,6 @@ class PokerAwardsParser:
                     "stat": "By-the-book basic strategy"
                 }
         
-        # Biggest Bluffer
-        bluffer_candidates = [(name, data) for name, data in players.items() 
-                            if data.get('bets', 0) > 2]
-        if bluffer_candidates:
-            bluffer = max(bluffer_candidates,
-                        key=lambda x: x[1]['bets'] / max(x[1].get('showdowns', 1), 1))
-            awards["🎭 Biggest Bluffer"] = {
-                "winner": bluffer[0],
-                "description": "Firing barrels with air, keeping the table guessing",
-                "stat": "Master of the poker face"
-            }
-        
         # Bubble Boy
         if len(players) >= 4:
             bubble_position = (len(players) + 1) // 2
@@ -1295,7 +915,7 @@ class PokerAwardsParser:
         return awards
     
     def _get_sample_awards(self):
-        """Return fun sample awards when no real data"""
+        """Return sample awards when no real data"""
         return {
             "🏆 Tournament Champion": {
                 "winner": "Player1", 
@@ -1307,21 +927,10 @@ class PokerAwardsParser:
                 "description": "Fearless bets and raises kept everyone on edge", 
                 "stat": "Never met a pot they didn't want to steal"
             },
-            "🍀 Luckiest (Suckout King)": {
-                "winner": "Player3", 
-                "description": "Got incredibly lucky when it mattered most", 
-                "stat": "Won with 72 offsuit against pocket aces",
-                "details": ["Rivered a straight with 54 against top pair", "Hit a two-outer on the turn for the win"]
-            },
             "📞 Calling Station": {
-                "winner": "Player4", 
+                "winner": "Player3", 
                 "description": "Never saw a bet they didn't want to call", 
                 "stat": "The human slot machine"
-            },
-            "🎭 Biggest Bluffer": {
-                "winner": "Player5", 
-                "description": "Firing barrels with air, keeping the table guessing", 
-                "stat": "Master of the poker face"
             }
         }
     
@@ -1338,41 +947,25 @@ class PokerAwardsParser:
 
 parser = PokerAwardsParser()
 
-# Load existing results
+# Load existing results from PostgreSQL
 def load_results():
-    if RESULTS_FILE.exists():
-        try:
-            with open(RESULTS_FILE, 'r') as f:
-                data = json.load(f)
-                save_to_env_backup(data)
-                return data
-        except Exception as e:
-            print(f"Failed to load from file: {e}")
+    """Load tournament results from PostgreSQL, fallback to sample data"""
+    # Try loading from PostgreSQL first
+    result = load_tournament_results()
+    if result:
+        print("Loaded tournament results from PostgreSQL")
+        return result
     
-    backup_data = load_from_env_backup()
-    if backup_data:
-        print("Loaded from environment backup")
-        return {
-            "tournament_date": backup_data.get("tournament_date", datetime.now().strftime("%B %d, %Y at %I:%M %p")),
-            "tournament_id": backup_data.get("tournament_id", "Unknown"),
-            "total_players": len(backup_data.get("awards", {})),
-            "awards": backup_data.get("awards", {}),
-            "preparation_h_club": backup_data.get("preparation_h_club", []),
-            "last_updated": datetime.now().isoformat()
-        }
-    
-    print("No existing data found, using sample data")
+    # Fallback to sample data
+    print("No tournament results found, using sample data")
     return parser._generate_sample_data()
 
 def save_results(data):
-    save_to_env_backup(data)
-    try:
-        with open(RESULTS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-        print("Successfully saved to both file and environment backup")
-    except Exception as e:
-        print(f"Failed to save to file: {e}")
-        print("Data is still saved in environment backup")
+    """Save tournament results to PostgreSQL"""
+    if save_tournament_results(data):
+        print("Tournament results saved to PostgreSQL successfully")
+    else:
+        print("Failed to save tournament results to PostgreSQL")
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -1409,9 +1002,7 @@ async def process_upload(file: UploadFile = File(...)):
         
         results = parser.parse_txt(content)
         
-        if "POKER_RESULTS_BACKUP" in os.environ:
-            del os.environ["POKER_RESULTS_BACKUP"]
-        
+        # Save to PostgreSQL instead of files
         save_results(results)
         await sse_manager.broadcast_update(results)
         
