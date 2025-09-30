@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Player Points Management</title>
+    <title>Admin Control Panel</title>
     <style>
         * {
             margin: 0;
@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -30,123 +30,39 @@
             border-radius: 16px;
             margin-bottom: 30px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
         }
 
         .header h1 {
             font-size: 2.5em;
-            color: #fbbf24;
             margin-bottom: 10px;
         }
 
-        .controls {
-            background: rgba(30, 41, 59, 0.8);
-            padding: 25px;
-            border-radius: 16px;
-            margin-bottom: 30px;
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
         }
 
-        .control-group {
-            margin-bottom: 20px;
-        }
-
-        .control-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #94a3b8;
-            font-weight: 600;
-        }
-
-        input[type="text"],
-        input[type="number"],
-        input[type="file"] {
-            width: 100%;
-            padding: 12px;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: #e2e8f0;
-            font-size: 1em;
-        }
-
-        .btn {
+        .nav-link {
+            display: inline-block;
             background: linear-gradient(135deg, #3b82f6, #2563eb);
             color: white;
             padding: 12px 24px;
-            border: none;
             border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
+            text-decoration: none;
             font-weight: 600;
-            transition: transform 0.2s;
+            transition: all 0.3s;
         }
 
-        .btn:hover {
+        .nav-link:hover {
             transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
         }
 
-        .btn-danger {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #22c55e, #16a34a);
-        }
-
-        .players-table {
-            background: rgba(30, 41, 59, 0.8);
-            border-radius: 16px;
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1000px;
-        }
-
-        th {
-            background: rgba(15, 23, 42, 0.9);
-            padding: 16px;
-            text-align: left;
-            color: #fbbf24;
-            font-weight: 700;
-        }
-
-        td {
-            padding: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        tr:hover {
-            background: rgba(59, 130, 246, 0.1);
-        }
-
-        .edit-form {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .edit-form input[type="number"] {
-            width: 80px;
-        }
-
-        .edit-form input[type="text"] {
-            width: 120px;
-        }
-
-        .edit-form button {
-            padding: 8px 16px;
-            font-size: 0.9em;
-        }
-
-        .warning-box {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.5);
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 20px;
+        .nav-link.secondary {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
         }
 
         .upload-section {
@@ -167,16 +83,104 @@
             margin-bottom: 20px;
         }
 
-        .back-link {
-            display: inline-block;
-            margin-top: 20px;
-            color: #3b82f6;
-            text-decoration: none;
+        .control-group {
+            margin: 15px 0;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
             font-weight: 600;
         }
 
-        .back-link:hover {
-            text-decoration: underline;
+        .control-group input[type="file"],
+        .control-group input[type="text"],
+        .control-group input[type="number"] {
+            width: 100%;
+            max-width: 400px;
+            padding: 10px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1em;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .controls {
+            margin: 30px 0;
+        }
+
+        .controls h2 {
+            margin-bottom: 15px;
+        }
+
+        .players-table {
+            background: #1e293b;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+
+        th {
+            background: #334155;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: rgba(51, 65, 85, 0.5);
+        }
+
+        .player-rank {
+            font-weight: 700;
+            font-size: 1.2em;
+            color: #fbbf24;
+        }
+
+        .player-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
         }
 
         .stat-badge {
@@ -186,25 +190,55 @@
             background: rgba(59, 130, 246, 0.2);
             font-weight: 600;
         }
+
+        .danger-zone {
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid rgba(239, 68, 68, 0.5);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛠️ Admin Control Panel</h1>
+            <h1>🛠️ Points Admin Panel</h1>
             <p>Manage player points, wins, knockouts, and tournament results</p>
+            
+            <div class="nav-buttons">
+                <a href="/upload/{{ upload_path }}" class="nav-link secondary">
+                    📊 Upload Tournament Awards
+                </a>
+                <a href="/leaderboard" class="nav-link">
+                    🏆 View Leaderboard
+                </a>
+            </div>
         </div>
 
         <!-- Upload Points File -->
         <div class="upload-section">
-            <h2>📤 Upload Tournament Results</h2>
+            <h2>📤 Upload Tournament Points</h2>
             <p>Format: PlayerName: Points, Wins, KO (Example: eskimos11: 20.53, 2, 0)</p>
             <form action="/upload/{{ upload_path }}/points" method="post" enctype="multipart/form-data">
                 <div class="control-group">
                     <label>Results TXT File</label>
                     <input type="file" name="file" accept=".txt" required>
                 </div>
-                <button type="submit" class="btn btn-success">Upload Results</button>
+                <button type="submit" class="btn btn-success">Upload Points</button>
             </form>
         </div>
 
@@ -228,38 +262,48 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for player in players %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td style="font-size: 1.2em;">{{ player.avatar or '' }}</td>
-                        <td>{{ player.player_name }}</td>
-                        <td><span class="stat-badge">{{ player.total_points }}</span></td>
-                        <td><span class="stat-badge">{{ player.wins or 0 }}</span></td>
-                        <td><span class="stat-badge">{{ player.knockouts or 0 }}</span></td>
-                        <td><span class="stat-badge">{{ player.tournaments_played }}</span></td>
-                        <td>
-                            <form action="/admin/{{ admin_path }}/edit" method="post" class="edit-form">
-                                <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                <input type="number" step="0.01" name="new_points" value="{{ player.total_points }}" placeholder="Points">
-                                <input type="text" name="reason" placeholder="Reason" required>
-                                <button type="submit" class="btn">Update Points</button>
-                            </form>
-                            <form action="/admin/{{ admin_path }}/update-avatar" method="post" class="edit-form" style="margin-top: 5px;">
-                                <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                <input type="text" name="avatar" value="{{ player.avatar or '' }}" placeholder="Avatar" maxlength="10">
-                                <button type="submit" class="btn">Update Avatar</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
+                    {% if players and players|length > 0 %}
+                        {% for player in players %}
+                        <tr>
+                            <td><span class="player-rank">#{{ loop.index }}</span></td>
+                            <td>
+                                {% if player.avatar %}
+                                <img src="{{ player.avatar }}" alt="{{ player.player_name }}" class="player-avatar">
+                                {% else %}
+                                <span style="font-size: 2em;">👤</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ player.player_name }}</strong></td>
+                            <td><span class="stat-badge">{{ "%.2f"|format(player.total_points) }} pts</span></td>
+                            <td><span class="stat-badge" style="background: rgba(251, 191, 36, 0.2);">{{ player.wins or 0 }} 🏆</span></td>
+                            <td><span class="stat-badge" style="background: rgba(239, 68, 68, 0.2);">{{ player.knockouts or 0 }} 💀</span></td>
+                            <td>{{ player.tournaments_played }}</td>
+                            <td>
+                                <form action="/admin/{{ admin_path }}/edit" method="post" style="display: inline;">
+                                    <input type="hidden" name="player_name" value="{{ player.player_name }}">
+                                    <input type="number" name="points" step="0.01" placeholder="Points" style="width: 80px; padding: 5px;">
+                                    <input type="number" name="wins" placeholder="Wins" style="width: 60px; padding: 5px;">
+                                    <input type="number" name="knockouts" placeholder="KOs" style="width: 60px; padding: 5px;">
+                                    <button type="submit" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.9em;">Edit</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                No players yet. Upload a tournament results file to get started!
+                            </td>
+                        </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
 
         <!-- Danger Zone -->
-        <div class="warning-box">
-            <h2>⚠️ Danger Zone</h2>
-            <p>Reset all player points to zero. This action cannot be undone!</p>
+        <div class="danger-zone">
+            <h3 style="color: #ef4444; margin-bottom: 10px;">⚠️ Danger Zone</h3>
+            <p style="margin-bottom: 15px;">This will reset ALL player points to 0. This action cannot be undone!</p>
             <form action="/admin/{{ admin_path }}/reset" method="post" onsubmit="return confirm('Are you sure you want to reset ALL player points? This cannot be undone!');">
                 <button type="submit" class="btn btn-danger" style="margin-top: 15px;">Reset All Points</button>
             </form>
