@@ -316,4 +316,35 @@
                             <td>
                                 <form action="/admin/{{ admin_path }}/edit" method="post" style="display: inline;">
                                     <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                    <input type="number" name="points" step="0.01" placeholder="Points" style="width
+                                    <input type="number" name="points" step="0.01" placeholder="Points" style="width: 80px; padding: 5px; background: #1a1a1a; border: 1px solid rgba(139, 90, 43, 0.3); color: #e8e8e8; border-radius: 4px;">
+                                    <input type="number" name="wins" placeholder="Wins" style="width: 60px; padding: 5px; background: #1a1a1a; border: 1px solid rgba(139, 90, 43, 0.3); color: #e8e8e8; border-radius: 4px;">
+                                    <input type="number" name="knockouts" placeholder="KOs" style="width: 60px; padding: 5px; background: #1a1a1a; border: 1px solid rgba(139, 90, 43, 0.3); color: #e8e8e8; border-radius: 4px;">
+                                    <button type="submit" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.9em;">Edit</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 40px; color: #999;">
+                                No players yet. Upload a tournament results file to get started!
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="danger-zone">
+            <h3>⚠️ Danger Zone</h3>
+            <p style="margin-bottom: 15px; color: #999;">This will reset ALL player points to 0. This action cannot be undone!</p>
+            <form action="/admin/{{ admin_path }}/reset" method="post" onsubmit="return confirm('Are you sure you want to reset ALL player points? This cannot be undone!');">
+                <button type="submit" class="btn btn-danger" style="margin-top: 15px;">Reset All Points</button>
+            </form>
+        </div>
+
+        <a href="/" class="back-link">← Back to Awards Board</a>
+    </div>
+</body>
+</html>
