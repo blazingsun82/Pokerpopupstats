@@ -1168,6 +1168,32 @@ async def admin_reset_all():
         return {"success": True, "message": "All points reset successfully"}
     raise HTTPException(500, "Failed to reset points")
 
+@app.get(f"/admin/{ADMIN_SECRET_PATH}/schema-sync")
+async def schema_sync():
+    """Synchronize database schema with application code"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Drop existing tables
+        cur.execute('DROP TABLE IF EXISTS points_history CASCADE')
+        cur.execute('DROP TABLE IF EXISTS player_points CASCADE')
+        cur.execute('DROP TABLE IF EXISTS tournament_results CASCADE')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        # Recreate with correct schema
+        init_database()
+        
+        return JSONResponse(content={
+            "success": True, 
+            "message": "Database schema synchronized successfully"
+        })
+    except Exception as e:
+        return JSONResponse(content={"success": False, "error": str(e)})
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
