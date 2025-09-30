@@ -318,6 +318,23 @@
             </form>
         </div>
 
+        <!-- Update Avatar Section -->
+        <div class="upload-section" style="background: rgba(139, 90, 43, 0.15); border-color: rgba(139, 90, 43, 0.4);">
+            <h2>Update Player Avatar</h2>
+            <p>Set avatar image path for a player (e.g., /static/eskimos11.png)</p>
+            <form action="/admin/{{ admin_path }}/update-avatar" method="post">
+                <div class="control-group">
+                    <label>Player Name</label>
+                    <input type="text" name="player_name" placeholder="eskimos11" required>
+                </div>
+                <div class="control-group">
+                    <label>Avatar Path</label>
+                    <input type="text" name="avatar" placeholder="/static/eskimos11.png" required>
+                </div>
+                <button type="submit" class="btn btn-success">Update Avatar</button>
+            </form>
+        </div>
+
         <!-- Current Players -->
         <div class="controls">
             <h2>Current Player Standings</h2>
