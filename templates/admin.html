@@ -13,8 +13,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #e2e8f0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%);
+            color: #e8e8e8;
             padding: 20px;
             min-height: 100vh;
         }
@@ -25,17 +25,36 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
             padding: 30px;
             border-radius: 16px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
             text-align: center;
+            border: 2px solid rgba(139, 90, 43, 0.3);
+        }
+
+        .logo-container {
+            margin-bottom: 15px;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            filter: drop-shadow(0 8px 16px rgba(139, 90, 43, 0.4));
         }
 
         .header h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
+            background: linear-gradient(135deg, #d4a574, #b8885a, #8b5a2b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #b8885a;
         }
 
         .nav-buttons {
@@ -47,27 +66,28 @@
 
         .nav-link {
             display: inline-block;
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            background: linear-gradient(135deg, #8b5a2b, #6d4623);
             color: white;
             padding: 12px 24px;
             border-radius: 8px;
             text-decoration: none;
             font-weight: 600;
             transition: all 0.3s;
+            border: 1px solid rgba(139, 90, 43, 0.5);
         }
 
         .nav-link:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 8px 20px rgba(139, 90, 43, 0.5);
         }
 
         .nav-link.secondary {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
+            background: linear-gradient(135deg, #5a3a1d, #4a2e18);
         }
 
         .upload-section {
-            background: rgba(34, 197, 94, 0.1);
-            border: 2px dashed rgba(34, 197, 94, 0.5);
+            background: rgba(139, 90, 43, 0.1);
+            border: 2px dashed rgba(139, 90, 43, 0.5);
             padding: 30px;
             border-radius: 16px;
             text-align: center;
@@ -76,10 +96,11 @@
 
         .upload-section h2 {
             margin-bottom: 15px;
+            color: #d4a574;
         }
 
         .upload-section p {
-            color: #94a3b8;
+            color: #b8885a;
             margin-bottom: 20px;
         }
 
@@ -91,6 +112,7 @@
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
+            color: #d4a574;
         }
 
         .control-group input[type="file"],
@@ -99,10 +121,10 @@
             width: 100%;
             max-width: 400px;
             padding: 10px;
-            border: 1px solid #334155;
+            border: 1px solid rgba(139, 90, 43, 0.3);
             border-radius: 8px;
-            background: #1e293b;
-            color: #e2e8f0;
+            background: #1a1a1a;
+            color: #e8e8e8;
         }
 
         .btn {
@@ -116,21 +138,22 @@
         }
 
         .btn-success {
-            background: linear-gradient(135deg, #22c55e, #16a34a);
+            background: linear-gradient(135deg, #8b5a2b, #6d4623);
             color: white;
         }
 
         .btn-success:hover {
             transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(139, 90, 43, 0.5);
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            background: linear-gradient(135deg, #8b5a2b, #6d4623);
             color: white;
         }
 
         .btn-danger {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
+            background: linear-gradient(135deg, #8b2b2b, #6d2323);
             color: white;
         }
 
@@ -140,13 +163,15 @@
 
         .controls h2 {
             margin-bottom: 15px;
+            color: #d4a574;
         }
 
         .players-table {
-            background: #1e293b;
+            background: rgba(30, 30, 30, 0.9);
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(139, 90, 43, 0.2);
         }
 
         table {
@@ -160,21 +185,23 @@
         }
 
         th {
-            background: #334155;
+            background: rgba(20, 20, 20, 0.95);
             font-weight: 700;
             text-transform: uppercase;
             font-size: 0.85em;
             letter-spacing: 0.5px;
+            color: #d4a574;
+            border-bottom: 2px solid rgba(139, 90, 43, 0.3);
         }
 
         tr:hover {
-            background: rgba(51, 65, 85, 0.5);
+            background: rgba(139, 90, 43, 0.1);
         }
 
         .player-rank {
             font-weight: 700;
             font-size: 1.2em;
-            color: #fbbf24;
+            color: #d4a574;
         }
 
         .player-avatar {
@@ -187,22 +214,27 @@
             display: inline-block;
             padding: 4px 8px;
             border-radius: 4px;
-            background: rgba(59, 130, 246, 0.2);
+            background: rgba(139, 90, 43, 0.2);
             font-weight: 600;
+            border: 1px solid rgba(139, 90, 43, 0.3);
         }
 
         .danger-zone {
-            background: rgba(239, 68, 68, 0.1);
-            border: 2px solid rgba(239, 68, 68, 0.5);
+            background: rgba(139, 43, 43, 0.15);
+            border: 2px solid rgba(139, 43, 43, 0.5);
             padding: 20px;
             border-radius: 12px;
             margin-top: 20px;
         }
 
+        .danger-zone h3 {
+            color: #d48574;
+        }
+
         .back-link {
             display: inline-block;
             margin-top: 30px;
-            color: #3b82f6;
+            color: #d4a574;
             text-decoration: none;
             font-weight: 600;
             font-size: 1.1em;
@@ -216,22 +248,25 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛠️ Points Admin Panel</h1>
+            <div class="logo-container">
+                <img src="/static/logo.png" alt="Bingo Poker Pro's Logo" class="logo">
+            </div>
+            <h1>Points Admin Panel</h1>
             <p>Manage player points, wins, knockouts, and tournament results</p>
             
             <div class="nav-buttons">
                 <a href="/upload/{{ upload_path }}" class="nav-link secondary">
-                    📊 Upload Tournament Awards
+                    Upload Tournament Awards
                 </a>
                 <a href="/leaderboard" class="nav-link">
-                    🏆 View Leaderboard
+                    View Leaderboard
                 </a>
             </div>
         </div>
 
         <!-- Upload Points File -->
         <div class="upload-section">
-            <h2>📤 Upload Tournament Points</h2>
+            <h2>Upload Tournament Points</h2>
             <p>Format: PlayerName: Points, Wins, KO (Example: eskimos11: 20.53, 2, 0)</p>
             <form action="/upload/{{ upload_path }}/points" method="post" enctype="multipart/form-data">
                 <div class="control-group">
@@ -244,7 +279,7 @@
 
         <!-- Current Players -->
         <div class="controls">
-            <h2>👥 Current Player Standings</h2>
+            <h2>Current Player Standings</h2>
         </div>
 
         <div class="players-table">
@@ -275,41 +310,10 @@
                             </td>
                             <td><strong>{{ player.player_name }}</strong></td>
                             <td><span class="stat-badge">{{ "%.2f"|format(player.total_points) }} pts</span></td>
-                            <td><span class="stat-badge" style="background: rgba(251, 191, 36, 0.2);">{{ player.wins or 0 }} 🏆</span></td>
-                            <td><span class="stat-badge" style="background: rgba(239, 68, 68, 0.2);">{{ player.knockouts or 0 }} 💀</span></td>
+                            <td><span class="stat-badge" style="background: rgba(212, 165, 116, 0.2);">{{ player.wins or 0 }}</span></td>
+                            <td><span class="stat-badge" style="background: rgba(212, 133, 116, 0.2);">{{ player.knockouts or 0 }}</span></td>
                             <td>{{ player.tournaments_played }}</td>
                             <td>
                                 <form action="/admin/{{ admin_path }}/edit" method="post" style="display: inline;">
                                     <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                    <input type="number" name="points" step="0.01" placeholder="Points" style="width: 80px; padding: 5px;">
-                                    <input type="number" name="wins" placeholder="Wins" style="width: 60px; padding: 5px;">
-                                    <input type="number" name="knockouts" placeholder="KOs" style="width: 60px; padding: 5px;">
-                                    <button type="submit" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.9em;">Edit</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
-                                No players yet. Upload a tournament results file to get started!
-                            </td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Danger Zone -->
-        <div class="danger-zone">
-            <h3 style="color: #ef4444; margin-bottom: 10px;">⚠️ Danger Zone</h3>
-            <p style="margin-bottom: 15px;">This will reset ALL player points to 0. This action cannot be undone!</p>
-            <form action="/admin/{{ admin_path }}/reset" method="post" onsubmit="return confirm('Are you sure you want to reset ALL player points? This cannot be undone!');">
-                <button type="submit" class="btn btn-danger" style="margin-top: 15px;">Reset All Points</button>
-            </form>
-        </div>
-
-        <a href="/" class="back-link">← Back to Awards Board</a>
-    </div>
-</body>
-</html>
+                                    <input type="number" name="points" step="0.01" placeholder="Points" style="width
