@@ -39,8 +39,8 @@
         }
 
         .logo {
-            width: 180px;
-            height: 180px;
+            width: 120px;
+            height: 120px;
             filter: drop-shadow(0 8px 16px rgba(139, 90, 43, 0.4));
         }
 
@@ -62,6 +62,7 @@
             gap: 15px;
             justify-content: center;
             margin-top: 20px;
+            flex-wrap: wrap;
         }
 
         .nav-link {
@@ -150,6 +151,8 @@
         .btn-primary {
             background: linear-gradient(135deg, #8b5a2b, #6d4623);
             color: white;
+            padding: 5px 10px;
+            font-size: 0.9em;
         }
 
         .btn-danger {
@@ -169,7 +172,7 @@
         .players-table {
             background: rgba(30, 30, 30, 0.9);
             border-radius: 12px;
-            overflow: hidden;
+            overflow-x: auto;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
             border: 1px solid rgba(139, 90, 43, 0.2);
         }
@@ -194,7 +197,11 @@
             border-bottom: 2px solid rgba(139, 90, 43, 0.3);
         }
 
-        tr:hover {
+        tbody tr {
+            border-bottom: 1px solid rgba(139, 90, 43, 0.1);
+        }
+
+        tbody tr:hover {
             background: rgba(139, 90, 43, 0.1);
         }
 
@@ -229,6 +236,7 @@
 
         .danger-zone h3 {
             color: #d48574;
+            margin-bottom: 10px;
         }
 
         .back-link {
@@ -242,6 +250,39 @@
 
         .back-link:hover {
             text-decoration: underline;
+        }
+
+        .edit-input {
+            width: 80px;
+            padding: 5px;
+            background: #1a1a1a;
+            border: 1px solid rgba(139, 90, 43, 0.3);
+            color: #e8e8e8;
+            border-radius: 4px;
+            margin-right: 5px;
+        }
+
+        .edit-input-small {
+            width: 60px;
+        }
+
+        @media (max-width: 768px) {
+            .logo {
+                width: 80px;
+                height: 80px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            table {
+                font-size: 0.9em;
+            }
+
+            th, td {
+                padding: 10px 8px;
+            }
         }
     </style>
 </head>
@@ -316,4 +357,35 @@
                             <td>
                                 <form action="/admin/{{ admin_path }}/edit" method="post" style="display: inline;">
                                     <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                    <input type="number" name="points" step="0.01" placeholder="Points" style="width
+                                    <input type="number" name="points" step="0.01" placeholder="Points" class="edit-input">
+                                    <input type="number" name="wins" placeholder="Wins" class="edit-input edit-input-small">
+                                    <input type="number" name="knockouts" placeholder="KOs" class="edit-input edit-input-small">
+                                    <button type="submit" class="btn btn-primary">Edit</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 40px; color: #999;">
+                                No players yet. Upload a tournament results file to get started!
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="danger-zone">
+            <h3>Danger Zone</h3>
+            <p style="margin-bottom: 15px; color: #999;">This will reset ALL player points to 0. This action cannot be undone!</p>
+            <form action="/admin/{{ admin_path }}/reset" method="post" onsubmit="return confirm('Are you sure you want to reset ALL player points? This cannot be undone!');">
+                <button type="submit" class="btn btn-danger" style="margin-top: 15px;">Reset All Points</button>
+            </form>
+        </div>
+
+        <a href="/" class="back-link">Back to Awards Board</a>
+    </div>
+</body>
+</html>
