@@ -13,8 +13,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
-            color: #e2e8f0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%);
+            color: #e8e8e8;
             padding: 20px;
             min-height: 100vh;
         }
@@ -25,35 +25,45 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
             padding: 40px;
             border-radius: 16px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(139, 90, 43, 0.3);
+        }
+
+        .logo-container {
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 100px;
+            height: 100px;
+            filter: drop-shadow(0 8px 16px rgba(139, 90, 43, 0.4));
         }
 
         .header h1 {
             font-size: 3em;
             margin-bottom: 10px;
-            background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+            background: linear-gradient(135deg, #d4a574, #b8885a, #8b5a2b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .header p {
-            color: #94a3b8;
+            color: #b8885a;
             font-size: 1.2em;
         }
 
         .leaderboard-table {
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(30, 30, 30, 0.9);
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(139, 90, 43, 0.2);
         }
 
         table {
@@ -62,18 +72,18 @@
         }
 
         thead {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
         }
 
         th {
             padding: 20px 16px;
             text-align: left;
-            color: #fbbf24;
+            color: #d4a574;
             font-weight: 700;
             font-size: 1.1em;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border-bottom: 2px solid rgba(251, 191, 36, 0.3);
+            border-bottom: 2px solid rgba(139, 90, 43, 0.4);
         }
 
         th:first-child {
@@ -83,7 +93,7 @@
 
         td {
             padding: 18px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(139, 90, 43, 0.1);
             font-size: 1.05em;
         }
 
@@ -92,7 +102,7 @@
         }
 
         tbody tr:hover {
-            background: rgba(59, 130, 246, 0.1);
+            background: rgba(139, 90, 43, 0.1);
         }
 
         tbody tr:last-child td {
@@ -105,10 +115,10 @@
             font-size: 1.4em;
         }
 
-        .rank-1 { color: #ffd700; }
-        .rank-2 { color: #c0c0c0; }
+        .rank-1 { color: #d4a574; }
+        .rank-2 { color: #a0a0a0; }
         .rank-3 { color: #cd7f32; }
-        .rank-other { color: #fbbf24; }
+        .rank-other { color: #b8885a; }
 
         .player-cell {
             display: flex;
@@ -124,8 +134,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(59, 130, 246, 0.1);
+            background: rgba(139, 90, 43, 0.15);
             border-radius: 50%;
+            border: 1px solid rgba(139, 90, 43, 0.3);
         }
 
         .stat-cell {
@@ -133,32 +144,32 @@
         }
 
         .stat-points {
-            color: #22c55e;
+            color: #d4a574;
             font-size: 1.1em;
         }
 
         .stat-wins {
-            color: #fbbf24;
+            color: #b8885a;
         }
 
         .stat-ko {
-            color: #ef4444;
+            color: #d48574;
         }
 
         .stat-played {
-            color: #94a3b8;
+            color: #999;
         }
 
         .empty-state {
             text-align: center;
             padding: 80px 20px;
-            color: #64748b;
+            color: #666;
         }
 
         .empty-state h2 {
             font-size: 2em;
             margin-bottom: 12px;
-            color: #94a3b8;
+            color: #999;
         }
 
         .empty-state p {
@@ -168,7 +179,7 @@
         .back-link {
             display: inline-block;
             margin-top: 30px;
-            color: #3b82f6;
+            color: #d4a574;
             text-decoration: none;
             font-weight: 600;
             font-size: 1.1em;
@@ -176,13 +187,18 @@
         }
 
         .back-link:hover {
-            color: #60a5fa;
+            color: #b8885a;
             text-decoration: underline;
         }
 
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2.2em;
+            }
+
+            .logo {
+                width: 80px;
+                height: 80px;
             }
 
             th, td {
@@ -205,7 +221,10 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏆 Season Leaderboard</h1>
+            <div class="logo-container">
+                <img src="/static/logo.png" alt="Bingo Poker Pro's Logo" class="logo">
+            </div>
+            <h1>Season Leaderboard</h1>
             <p>Top players ranked by tournament points</p>
         </div>
 
