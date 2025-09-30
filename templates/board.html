@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🃏 Poker Awards Board</title>
+    <title>Poker Awards Board</title>
     <style>
         * {
             margin: 0;
@@ -13,36 +13,46 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%);
             min-height: 100vh;
             padding: 20px;
-            color: #e2e8f0;
+            color: #e8e8e8;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            background: rgba(15, 23, 42, 0.95);
+            background: rgba(20, 20, 20, 0.95);
             border-radius: 24px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(139, 90, 43, 0.3);
             overflow: hidden;
             backdrop-filter: blur(20px);
         }
 
         .header {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            color: #f1f5f9;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            color: #f1f1f1;
             padding: 40px;
             text-align: center;
             position: relative;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 2px solid rgba(139, 90, 43, 0.4);
+        }
+
+        .logo-container {
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            filter: drop-shadow(0 8px 16px rgba(139, 90, 43, 0.4));
         }
 
         .header h1 {
             font-size: 3.5em;
             margin-bottom: 16px;
             font-weight: 700;
-            background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+            background: linear-gradient(135deg, #d4a574, #b8885a, #8b5a2b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -54,24 +64,25 @@
             opacity: 0.85;
             margin-bottom: 16px;
             font-weight: 400;
+            color: #b8885a;
         }
 
         .live-indicator {
             display: inline-flex;
             align-items: center;
-            background: rgba(34, 197, 94, 0.15);
-            color: #22c55e;
+            background: rgba(139, 90, 43, 0.2);
+            color: #d4a574;
             padding: 8px 16px;
             border-radius: 24px;
             font-size: 0.9em;
             font-weight: 600;
-            border: 1px solid rgba(34, 197, 94, 0.3);
+            border: 1px solid rgba(139, 90, 43, 0.4);
         }
 
         .live-dot {
             width: 8px;
             height: 8px;
-            background: #22c55e;
+            background: #d4a574;
             border-radius: 50%;
             margin-right: 8px;
             animation: pulse 2s infinite;
@@ -80,38 +91,38 @@
         .leaderboard-link {
             display: inline-block;
             margin-top: 20px;
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            background: linear-gradient(135deg, #8b5a2b, #6d4623);
             color: white;
             padding: 12px 24px;
             border-radius: 24px;
             text-decoration: none;
             font-size: 1em;
             font-weight: 600;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(139, 90, 43, 0.5);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 12px rgba(139, 90, 43, 0.3);
         }
 
         .leaderboard-link:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 8px 20px rgba(139, 90, 43, 0.5);
+            background: linear-gradient(135deg, #6d4623, #5a3a1d);
         }
 
         .refresh-note {
-            background: rgba(59, 130, 246, 0.1);
-            border-left: 4px solid #3b82f6;
+            background: rgba(139, 90, 43, 0.1);
+            border-left: 4px solid #8b5a2b;
             padding: 20px;
             margin: 24px;
             border-radius: 12px;
             text-align: center;
-            color: #94a3b8;
-            border: 1px solid rgba(59, 130, 246, 0.2);
+            color: #b8885a;
+            border: 1px solid rgba(139, 90, 43, 0.3);
         }
 
         .awards-section {
             padding: 40px;
-            background: rgba(15, 23, 42, 0.5);
+            background: rgba(10, 10, 10, 0.5);
         }
 
         .awards-grid {
@@ -121,20 +132,20 @@
         }
 
         .award-card {
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+            background: linear-gradient(135deg, rgba(30, 30, 30, 0.9) 0%, rgba(40, 40, 40, 0.7) 100%);
             padding: 32px;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(139, 90, 43, 0.2);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(139, 90, 43, 0.15);
             backdrop-filter: blur(10px);
         }
 
         .award-card:hover {
             transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(139, 90, 43, 0.4);
         }
 
         .award-card::before {
@@ -144,27 +155,27 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            background: linear-gradient(135deg, #d4a574, #b8885a);
         }
 
         /* Champion and Runner-up special styling */
         .award-card:nth-child(1) {
-            background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%);
-            border-color: rgba(251, 191, 36, 0.3);
+            background: linear-gradient(135deg, rgba(139, 90, 43, 0.25) 0%, rgba(30, 30, 30, 0.95) 100%);
+            border-color: rgba(212, 165, 116, 0.4);
         }
 
         .award-card:nth-child(1)::before {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+            background: linear-gradient(135deg, #d4a574, #b8885a, #8b5a2b);
             height: 6px;
         }
 
         .award-card:nth-child(2) {
-            background: linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(30, 41, 59, 0.9) 100%);
-            border-color: rgba(148, 163, 184, 0.3);
+            background: linear-gradient(135deg, rgba(100, 100, 100, 0.2) 0%, rgba(30, 30, 30, 0.95) 100%);
+            border-color: rgba(160, 160, 160, 0.3);
         }
 
         .award-card:nth-child(2)::before {
-            background: linear-gradient(135deg, #94a3b8, #64748b);
+            background: linear-gradient(135deg, #a0a0a0, #808080);
             height: 5px;
         }
 
@@ -172,7 +183,7 @@
             font-size: 1.4em;
             font-weight: 700;
             margin-bottom: 16px;
-            color: #f1f5f9;
+            color: #f1f1f1;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -180,20 +191,20 @@
 
         .award-emoji {
             font-size: 2.2em;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
         }
 
         .award-winner {
             font-size: 2em;
-            color: #fbbf24;
+            color: #d4a574;
             font-weight: 800;
             margin-bottom: 12px;
             line-height: 1.1;
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
         }
 
         .award-description {
-            color: #94a3b8;
+            color: #999;
             font-size: 1.05em;
             margin-bottom: 16px;
             font-style: italic;
@@ -201,97 +212,48 @@
         }
 
         .award-stat {
-            color: #22c55e;
+            color: #d4a574;
             font-weight: 600;
             font-size: 0.95em;
-            background: rgba(34, 197, 94, 0.1);
+            background: rgba(139, 90, 43, 0.2);
             padding: 8px 14px;
             border-radius: 20px;
             display: inline-block;
-            border: 1px solid rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(139, 90, 43, 0.3);
         }
 
         /* Special styling for Champion and Runner-up */
         .award-card:nth-child(1) .award-winner {
-            color: #fbbf24;
+            color: #d4a574;
             font-size: 2.4em;
         }
 
         .award-card:nth-child(2) .award-winner {
-            color: #94a3b8;
+            color: #a0a0a0;
             font-size: 2.2em;
         }
 
         .award-card:nth-child(1) .award-stat {
-            background: rgba(251, 191, 36, 0.15);
-            color: #fbbf24;
-            border-color: rgba(251, 191, 36, 0.3);
+            background: rgba(212, 165, 116, 0.25);
+            color: #d4a574;
+            border-color: rgba(212, 165, 116, 0.4);
         }
 
         .award-card:nth-child(2) .award-stat {
-            background: rgba(148, 163, 184, 0.15);
-            color: #94a3b8;
-            border-color: rgba(148, 163, 184, 0.3);
-        }
-
-        /* Award-specific accent colors */
-        .award-card:has(.award-title:contains("🔥"))::before {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-        }
-
-        .award-card:has(.award-title:contains("🍀"))::before {
-            background: linear-gradient(135deg, #22c55e, #16a34a);
-        }
-
-        .award-card:has(.award-title:contains("🧊"))::before {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-        }
-
-        .award-card:has(.award-title:contains("💀"))::before {
-            background: linear-gradient(135deg, #a855f7, #9333ea);
-        }
-
-        .award-card:has(.award-title:contains("🤠"))::before {
-            background: linear-gradient(135deg, #eab308, #ca8a04);
-        }
-
-        .award-card:has(.award-title:contains("🌪️"))::before {
-            background: linear-gradient(135deg, #f97316, #ea580c);
-        }
-
-        .award-card:has(.award-title:contains("🎯"))::before {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-        }
-
-        .award-card:has(.award-title:contains("⚡"))::before {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-        }
-
-        .award-card:has(.award-title:contains("🃏"))::before {
-            background: linear-gradient(135deg, #475569, #334155);
-        }
-
-        .award-card:has(.award-title:contains("⚓"))::before {
-            background: linear-gradient(135deg, #06b6d4, #0891b2);
-        }
-
-        .award-card:has(.award-title:contains("🐦"))::before {
-            background: linear-gradient(135deg, #f97316, #ea580c);
-        }
-
-        .award-card:has(.award-title:contains("🎭"))::before {
-            background: linear-gradient(135deg, #ec4899, #db2777);
+            background: rgba(160, 160, 160, 0.2);
+            color: #a0a0a0;
+            border-color: rgba(160, 160, 160, 0.3);
         }
 
         .special-section {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+            background: linear-gradient(135deg, rgba(139, 43, 43, 0.2) 0%, rgba(100, 30, 30, 0.15) 100%);
             padding: 40px;
             margin: 32px 24px;
             border-radius: 20px;
             text-align: center;
-            color: #f1f5f9;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #f1f1f1;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(139, 43, 43, 0.3);
             backdrop-filter: blur(10px);
         }
 
@@ -299,8 +261,8 @@
             font-size: 2.2em;
             margin-bottom: 16px;
             font-weight: 700;
-            color: #fca5a5;
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            color: #d48574;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
         }
 
         .bad-beat-list {
@@ -312,18 +274,18 @@
 
         .bad-beat-list li {
             margin: 12px 0;
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(10, 10, 10, 0.7);
             padding: 16px;
             border-radius: 12px;
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(139, 90, 43, 0.15);
         }
 
         .tournament-stats {
-            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
+            background: linear-gradient(135deg, rgba(10, 10, 10, 0.9) 0%, rgba(30, 30, 30, 0.7) 100%);
             padding: 32px;
             text-align: center;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(139, 90, 43, 0.2);
             backdrop-filter: blur(10px);
         }
 
@@ -335,7 +297,7 @@
 
         .stats-value {
             font-weight: 800;
-            color: #fbbf24;
+            color: #d4a574;
             font-size: 1.8em;
             display: block;
             margin-bottom: 4px;
@@ -343,7 +305,7 @@
 
         .last-updated {
             text-align: center;
-            color: #64748b;
+            color: #666;
             font-style: italic;
             margin-top: 20px;
             font-size: 0.9em;
@@ -374,6 +336,11 @@
                 font-size: 2.8em;
             }
             
+            .logo {
+                width: 90px;
+                height: 90px;
+            }
+            
             .stats-item {
                 display: block;
                 margin: 16px 0;
@@ -389,19 +356,22 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🃏 Bingo Poker Pro's Presents</h1>
+            <div class="logo-container">
+                <img src="/static/logo.png" alt="Bingo Poker Pro's Logo" class="logo">
+            </div>
+            <h1>Bingo Poker Pro's Presents</h1>
             <div class="tournament-info">{{ results.tournament_date }}</div>
             <div class="live-indicator">
                 <span class="live-dot"></span>
                 Live Updates
             </div>
             <a href="/leaderboard" class="leaderboard-link">
-                📊 Season Leaderboard
+                Season Leaderboard
             </a>
         </div>
 
         <div class="refresh-note">
-            🔄 This board updates automatically when new tournaments are uploaded - no refresh needed!
+            This board updates automatically when new tournaments are uploaded - no refresh needed!
         </div>
 
         <div class="awards-section">
@@ -422,13 +392,13 @@
 
         {% if results.preparation_h_club and results.preparation_h_club|length > 0 %}
         <div class="special-section">
-            <h3>🩹 Preparation H Club</h3>
+            <h3>Preparation H Club</h3>
             <p style="margin-bottom: 20px; font-size: 1.1em;">
                 <em>"Had it on the flop... robbed on the river"</em>
             </p>
             <ul class="bad-beat-list">
                 {% for bad_beat in results.preparation_h_club %}
-                <li>💔 {{ bad_beat.victim }} lost {{ bad_beat.victim_hand }} to {{ bad_beat.winner }} with {{ bad_beat.winner_hand }}</li>
+                <li>{{ bad_beat.victim }} lost {{ bad_beat.victim_hand }} to {{ bad_beat.winner }} with {{ bad_beat.winner_hand }}</li>
                 {% endfor %}
             </ul>
         </div>
@@ -444,7 +414,7 @@
                 <div>Awards</div>
             </div>
             <div class="stats-item">
-                <div class="stats-value" id="connectionStatus">🟢 Connected</div>
+                <div class="stats-value" id="connectionStatus">Connected</div>
                 <div>Status</div>
             </div>
             
@@ -465,7 +435,7 @@
             
             eventSource.onopen = function() {
                 console.log('Connected to live updates');
-                document.getElementById('connectionStatus').innerHTML = '🟢 Connected';
+                document.getElementById('connectionStatus').innerHTML = 'Connected';
                 reconnectAttempts = 0;
             };
 
@@ -484,13 +454,12 @@
                 const data = JSON.parse(event.data);
                 updateBoard(data, true);
                 
-                // Show a brief notification
                 showUpdateNotification();
             });
 
             eventSource.onerror = function(event) {
                 console.log('SSE connection error');
-                document.getElementById('connectionStatus').innerHTML = '🔴 Reconnecting...';
+                document.getElementById('connectionStatus').innerHTML = 'Reconnecting...';
                 
                 if (reconnectAttempts < maxReconnectAttempts) {
                     setTimeout(() => {
@@ -498,7 +467,7 @@
                         connectToUpdates();
                     }, 2000);
                 } else {
-                    document.getElementById('connectionStatus').innerHTML = '🔴 Offline';
+                    document.getElementById('connectionStatus').innerHTML = 'Offline';
                 }
             };
         }
@@ -507,7 +476,6 @@
             const awardsGrid = document.getElementById('awardsGrid');
             const lastUpdatedEl = document.getElementById('lastUpdated');
             
-            // Add animation class if this is a live update
             if (animate) {
                 awardsGrid.classList.add('update-animation');
                 setTimeout(() => {
@@ -515,7 +483,6 @@
                 }, 600);
             }
             
-            // Update awards grid
             awardsGrid.innerHTML = '';
             Object.entries(data.awards).forEach(([title, award]) => {
                 const titleParts = title.split(' ');
@@ -536,61 +503,53 @@
                 awardsGrid.appendChild(cardEl);
             });
             
-            // Update timestamp
             lastUpdatedEl.textContent = data.tournament_date;
-            
-            // Update Preparation H Club section
             updatePreparationHClub(data.preparation_h_club);
         }
 
         function updatePreparationHClub(preparationHClub) {
-            // Remove existing section
             const existingSection = document.querySelector('.special-section');
             if (existingSection) {
                 existingSection.remove();
             }
             
-            // Add new section if there are bad beats
             if (preparationHClub && preparationHClub.length > 0) {
                 const sectionHTML = `
                     <div class="special-section">
-                        <h3>🩹 Preparation H Club</h3>
+                        <h3>Preparation H Club</h3>
                         <p style="margin-bottom: 20px; font-size: 1.1em;">
                             <em>"Had it on the flop... robbed on the river"</em>
                         </p>
                         <ul class="bad-beat-list">
                             ${preparationHClub.map(badBeat => 
-                                `<li>💔 ${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}</li>`
+                                `<li>${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}</li>`
                             ).join('')}
                         </ul>
                     </div>
                 `;
                 
-                // Insert before tournament stats
                 const tournamentStats = document.querySelector('.tournament-stats');
                 tournamentStats.insertAdjacentHTML('beforebegin', sectionHTML);
             }
         }
 
         function showUpdateNotification() {
-            // Create a temporary notification
             const notification = document.createElement('div');
-            notification.innerHTML = '🎉 Awards board updated!';
+            notification.innerHTML = 'Awards board updated!';
             notification.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: #27ae60;
+                background: #8b5a2b;
                 color: white;
                 padding: 15px 20px;
                 border-radius: 8px;
-                box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+                box-shadow: 0 5px 20px rgba(0,0,0,0.5);
                 z-index: 1000;
                 font-weight: bold;
                 animation: slideIn 0.3s ease-out;
             `;
             
-            // Add slide-in animation
             const style = document.createElement('style');
             style.textContent = `
                 @keyframes slideIn {
@@ -602,7 +561,6 @@
             
             document.body.appendChild(notification);
             
-            // Remove after 3 seconds
             setTimeout(() => {
                 notification.style.animation = 'slideIn 0.3s ease-out reverse';
                 setTimeout(() => {
@@ -612,12 +570,10 @@
             }, 3000);
         }
 
-        // Initialize connection when page loads
         document.addEventListener('DOMContentLoaded', function() {
             connectToUpdates();
         });
 
-        // Cleanup on page unload
         window.addEventListener('beforeunload', function() {
             if (eventSource) {
                 eventSource.close();
