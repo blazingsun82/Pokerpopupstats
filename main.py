@@ -1004,7 +1004,8 @@ async def upload_page(request: Request):
     return templates.TemplateResponse("upload.html", {
         "request": request,
         "results": results,
-        "upload_url": f"/upload/{SECRET_UPLOAD_PATH}/process"
+        "upload_url": f"/upload/{SECRET_UPLOAD_PATH}/process",
+        "admin_path": ADMIN_SECRET_PATH
     })
 
 @app.post(f"/upload/{SECRET_UPLOAD_PATH}/process")
@@ -1133,11 +1134,42 @@ async def admin_panel(request: Request):
     })
 
 @app.post(f"/admin/{ADMIN_SECRET_PATH}/edit")
-async def admin_edit_points(player_name: str = Form(...), new_points: float = Form(...), reason: str = Form(...)):
-    """Edit player points manually"""
-    if edit_player_points(player_name, new_points, reason):
+async def admin_edit_points(
+    player_name: str = Form(...), 
+    points: float = Form(...), 
+    wins: int = Form(...), 
+    knockouts: int = Form(...)
+):
+    """Edit player points, wins, and KOs manually"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Add points, wins, and KOs to player's existing totals
+        cur.execute('''
+            INSERT INTO player_points (player_name, total_points, wins, knockouts)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (player_name)
+            DO UPDATE SET 
+                total_points = player_points.total_points + %s,
+                wins = player_points.wins + %s,
+                knockouts = player_points.knockouts + %s,
+                last_updated = CURRENT_TIMESTAMP
+        ''', (player_name, points, wins, knockouts, points, wins, knockouts))
+        
+        # Record in history
+        cur.execute('''
+            INSERT INTO points_history (player_name, tournament_date, points_change, action_type)
+            VALUES (%s, %s, %s, 'manual_edit')
+        ''', (player_name, 'Manual Edit', points))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
         return RedirectResponse(url=f"/admin/{ADMIN_SECRET_PATH}", status_code=303)
-    raise HTTPException(500, "Failed to update points")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to update points: {str(e)}")
 
 @app.post(f"/admin/{ADMIN_SECRET_PATH}/update-avatar")
 async def admin_update_avatar(player_name: str = Form(...), avatar: str = Form(...)):
@@ -1165,7 +1197,7 @@ async def admin_update_avatar(player_name: str = Form(...), avatar: str = Form(.
 async def admin_reset_all():
     """Reset all player points"""
     if reset_all_points():
-        return {"success": True, "message": "All points reset successfully"}
+        return RedirectResponse(url=f"/admin/{ADMIN_SECRET_PATH}", status_code=303)
     raise HTTPException(500, "Failed to reset points")
 
 @app.get(f"/admin/{ADMIN_SECRET_PATH}/schema-sync")
