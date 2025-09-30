@@ -357,9 +357,9 @@
                             <td>
                                 <form action="/admin/{{ admin_path }}/edit" method="post" style="display: inline;">
                                     <input type="hidden" name="player_name" value="{{ player.player_name }}">
-                                    <input type="number" name="points" step="0.01" placeholder="Points" class="edit-input">
-                                    <input type="number" name="wins" placeholder="Wins" class="edit-input edit-input-small">
-                                    <input type="number" name="knockouts" placeholder="KOs" class="edit-input edit-input-small">
+                                    <input type="number" name="points" step="0.01" placeholder="Points" class="edit-input" value="0" required>
+                                    <input type="number" name="wins" placeholder="Wins" class="edit-input edit-input-small" value="0" required>
+                                    <input type="number" name="knockouts" placeholder="KOs" class="edit-input edit-input-small" value="0" required>
                                     <button type="submit" class="btn btn-primary">Edit</button>
                                 </form>
                             </td>
