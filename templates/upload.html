@@ -53,6 +53,44 @@
             font-weight: 400;
         }
 
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            display: inline-block;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            text-decoration: none;
+            font-weight: 600;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .nav-link.secondary {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .nav-link.secondary:hover {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+        }
+
         .upload-section {
             padding: 40px;
             background: rgba(15, 23, 42, 0.5);
@@ -272,6 +310,15 @@
         <div class="header">
             <h1>🃏 Bingo Poker Pro's Presents</h1>
             <p>Upload your PokerStars hand history to update the awards board</p>
+            
+            <div class="nav-buttons">
+                <a href="/admin/{{ admin_path }}" class="nav-link secondary">
+                    📊 Manage Points & Leaderboard
+                </a>
+                <a href="/" class="nav-link">
+                    🏆 View Awards Board
+                </a>
+            </div>
         </div>
 
         <div class="upload-section">
