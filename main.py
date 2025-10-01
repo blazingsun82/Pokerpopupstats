@@ -768,24 +768,26 @@ class PokerAwardsParser:
         # PLACEMENT AWARDS - EXEMPT from one-award restriction
         
         # Tournament Champion (1st place)
-        champion = min(players.items(), key=lambda x: x[1].get('final_position', 999))
-        awards["🏆 Tournament Champion"] = {
-            "winner": champion[0],
-            "description": "Survived the chaos and claimed the crown",
-            "stat": f"Outlasted {len(players)-1} other players"
-        }
-        # DON'T add champion to awarded_players - they can still win behavioral awards
+        champion_candidates = [(name, data) for name, data in players.items() 
+                              if data.get('final_position') == 1]
+        if champion_candidates:
+            champion = champion_candidates[0]
+            awards["🏆 Tournament Champion"] = {
+                "winner": champion[0],
+                "description": "Survived the chaos and claimed the crown",
+                "stat": f"Outlasted {len(players)-1} other players"
+            }
         
         # Runner Up (2nd place)
-        second_place = min(players.items(), 
-                          key=lambda x: x[1]['final_position'] if x[1]['final_position'] > 1 else 999)
-        if second_place[1]['final_position'] <= len(players):
+        runner_up_candidates = [(name, data) for name, data in players.items() 
+                               if data.get('final_position') == 2]
+        if runner_up_candidates:
+            second_place = runner_up_candidates[0]
             awards["🥈 Runner Up"] = {
                 "winner": second_place[0],
                 "description": "So close to glory, yet so far",
                 "stat": "Heads-up warrior"
             }
-            # DON'T add runner-up to awarded_players - they can still win behavioral awards
         
         # BEHAVIORAL AWARDS - Subject to one-award restriction
         
