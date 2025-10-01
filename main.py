@@ -716,13 +716,44 @@ class PokerAwardsParser:
         return False
     
     def _determine_final_positions(self, players: Dict, full_text: str):
-        """Determine final tournament positions"""
-        chip_counts = [(name, data['max_chips']) for name, data in players.items() 
-                      if name != 'tournament_info']
-        chip_counts.sort(key=lambda x: x[1], reverse=True)
+        """Determine final tournament positions - Top 3 only"""
+        # Find the final hand (last one in the file)
+        hands = re.findall(r'(PokerStars Hand #\d+: Tournament #\d+.*?)(?=PokerStars Hand #\d+: Tournament #\d+|\Z)', full_text, re.DOTALL)
         
-        for position, (player_name, chips) in enumerate(chip_counts, 1):
-            players[player_name]['final_position'] = position
+        if hands:
+            final_hand = hands[-1]
+            
+            # Find who won the final pot (1st place)
+            winner_pattern = r'(\w+(?:\*\d+)?) collected \d+ from pot'
+            final_winner_match = re.search(winner_pattern, final_hand)
+            
+            # Find who showed cards in the final hand (both finalists)
+            showdown_pattern = r'(\w+(?:\*\d+)?): shows'
+            finalists = re.findall(showdown_pattern, final_hand)
+            
+            if final_winner_match and finalists:
+                winner = final_winner_match.group(1)
+                # Winner is 1st
+                if winner in players:
+                    players[winner]['final_position'] = 1
+                
+                # Other finalist is 2nd
+                for finalist in finalists:
+                    if finalist != winner and finalist in players:
+                        players[finalist]['final_position'] = 2
+                        break
+        
+        # Assign 3rd place based on highest chip count among remaining players
+        unassigned = [(name, data) for name, data in players.items() 
+                     if name != 'tournament_info' and data.get('final_position') is None]
+        
+        if unassigned:
+            # Sort by max chips and assign 3rd place to the top player
+            unassigned.sort(key=lambda x: x[1]['max_chips'], reverse=True)
+            third_place_player = unassigned[0]
+            players[third_place_player[0]]['final_position'] = 3
+        
+        # Everyone else gets None (no specific position tracked)
     
     def _calculate_awards(self, players_data: Dict[str, Dict]) -> Dict[str, Dict]:
         """Calculate fun club-style awards from parsed player data"""
