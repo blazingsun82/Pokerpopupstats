@@ -732,7 +732,9 @@ class PokerAwardsParser:
             return self._get_sample_awards()
         
         awards = {}
-        awarded_players = set()  # Track who has won awards to avoid conflicts
+        awarded_players = set()  # Track who has won BEHAVIORAL awards (not placement awards)
+        
+        # PLACEMENT AWARDS - EXEMPT from one-award restriction
         
         # Tournament Champion (1st place)
         champion = min(players.items(), key=lambda x: x[1].get('final_position', 999))
@@ -741,7 +743,7 @@ class PokerAwardsParser:
             "description": "Survived the chaos and claimed the crown",
             "stat": f"Outlasted {len(players)-1} other players"
         }
-        awarded_players.add(champion[0])
+        # DON'T add champion to awarded_players - they can still win behavioral awards
         
         # Runner Up (2nd place)
         second_place = min(players.items(), 
@@ -752,7 +754,9 @@ class PokerAwardsParser:
                 "description": "So close to glory, yet so far",
                 "stat": "Heads-up warrior"
             }
-            awarded_players.add(second_place[0])
+            # DON'T add runner-up to awarded_players - they can still win behavioral awards
+        
+        # BEHAVIORAL AWARDS - Subject to one-award restriction
         
         # Most Aggressive
         aggressive_players = [(name, data) for name, data in players.items() 
@@ -919,17 +923,18 @@ class PokerAwardsParser:
             }
             awarded_players.add(abc_player[0])
         
-        # Bubble Boy
+        # Bubble Boy (placement award - also EXEMPT)
         if len(players) >= 4:
             bubble_position = (len(players) + 1) // 2
             bubble_candidates = [p for p in players.items() 
-                               if p[0] not in awarded_players and p[1].get('final_position') == bubble_position]
+                               if p[1].get('final_position') == bubble_position]
             if bubble_candidates:
                 awards["💀 Bubble Boy"] = {
                     "winner": bubble_candidates[0][0],
                     "description": "Knocked out just before the money in heartbreaking fashion",
                     "stat": "So close to cashing, yet so far"
                 }
+                # DON'T add to awarded_players - placement award is exempt
         
         return awards
     
