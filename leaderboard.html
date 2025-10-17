@@ -185,6 +185,13 @@
             font-size: 1.1em;
         }
 
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #b8885a;
+            font-size: 1.2em;
+        }
+
         .back-link {
             display: inline-block;
             margin-top: 30px;
@@ -231,73 +238,218 @@
     <div class="container">
         <div class="header">
             <div class="logo-container">
-                <img src="/static/logo.png" alt="Bingo Poker Pro's Logo" class="logo">
+                <img src="eskimos11.png" alt="Bingo Poker Pro's Logo" class="logo">
             </div>
             <h1>Bingo Poker Pro's</h1>
             <h2>Presents</h2>
             <p>Season Leaderboard</p>
         </div>
 
-        <div class="leaderboard-table">
-            {% if players and players|length > 0 %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Player</th>
-                        <th>Points</th>
-                        <th>Wins</th>
-                        <th>KO</th>
-                        <th>Played</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for player in players %}
-                    <tr>
-                        <td class="rank-cell">
-                            <span class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% else %}rank-other{% endif %}">
-                                #{{ loop.index }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="player-cell">
-                                <div class="avatar">
-                                    {% if player.avatar %}
-                                        {{ player.avatar }}
-                                    {% else %}
-                                        👤
-                                    {% endif %}
-                                </div>
-                                <span>{{ player.player_name }}</span>
-                            </div>
-                        </td>
-                        <td class="stat-cell stat-points">
-                            {{ "%.2f"|format(player.total_points) }}
-                        </td>
-                        <td class="stat-cell stat-wins">
-                            {{ player.wins or 0 }}
-                        </td>
-                        <td class="stat-cell stat-ko">
-                            {{ player.knockouts or 0 }}
-                        </td>
-                        <td class="stat-cell stat-played">
-                            {{ player.tournaments_played }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <div class="empty-state">
-                <h2>No Data Yet</h2>
-                <p>Points will appear here once tournaments are recorded</p>
-            </div>
-            {% endif %}
+        <div class="leaderboard-table" id="leaderboardContainer">
+            <div class="loading">Loading leaderboard data...</div>
         </div>
 
         <div style="text-align: center;">
-            <a href="/" class="back-link">← Back to Awards Board</a>
+            <a href="index.html" class="back-link">← Back to Awards Board</a>
         </div>
     </div>
+
+    <script>
+        // Sample leaderboard data for testing
+        const sampleLeaderboardData = [
+            {
+                player_name: "eskimos11",
+                total_points: 20.53,
+                wins: 2,
+                knockouts: 0,
+                tournaments_played: 14,
+                avatar: "🎯"
+            },
+            {
+                player_name: "Dafuzzynipples",
+                total_points: 15.23,
+                wins: 3,
+                knockouts: 0,
+                tournaments_played: 9,
+                avatar: "🃏"
+            },
+            {
+                player_name: "spike 06",
+                total_points: 10.35,
+                wins: 2,
+                knockouts: 0,
+                tournaments_played: 8,
+                avatar: "♠️"
+            },
+            {
+                player_name: "Deanstr8",
+                total_points: 9.88,
+                wins: 2,
+                knockouts: 0,
+                tournaments_played: 7,
+                avatar: "🎲"
+            },
+            {
+                player_name: "Blazingsun81",
+                total_points: 9.00,
+                wins: 2,
+                knockouts: 0,
+                tournaments_played: 6,
+                avatar: "☀️"
+            },
+            {
+                player_name: "edsterfedor",
+                total_points: 7.61,
+                wins: 2,
+                knockouts: 0,
+                tournaments_played: 5,
+                avatar: "🎪"
+            },
+            {
+                player_name: "scottyred123",
+                total_points: 5.90,
+                wins: 1,
+                knockouts: 0,
+                tournaments_played: 4,
+                avatar: "🔴"
+            },
+            {
+                player_name: "stellalouise",
+                total_points: 3.51,
+                wins: 1,
+                knockouts: 0,
+                tournaments_played: 3,
+                avatar: "⭐"
+            },
+            {
+                player_name: "Trofimuk",
+                total_points: 3.31,
+                wins: 0,
+                knockouts: 0,
+                tournaments_played: 2,
+                avatar: "🏆"
+            },
+            {
+                player_name: "Sicknickel",
+                total_points: 2.90,
+                wins: 0,
+                knockouts: 0,
+                tournaments_played: 2,
+                avatar: "🪙"
+            },
+            {
+                player_name: "LadyAces1980",
+                total_points: 2.79,
+                wins: 0,
+                knockouts: 0,
+                tournaments_played: 1,
+                avatar: "👸"
+            }
+        ];
+
+        function loadLeaderboardData() {
+            // For now, use sample data
+            // Later this will fetch from your D1 database via Functions
+            updateLeaderboard(sampleLeaderboardData);
+            
+            // TODO: Replace with actual API call
+            // fetch('/api/leaderboard')
+            //     .then(response => response.json())
+            //     .then(data => updateLeaderboard(data))
+            //     .catch(error => {
+            //         console.error('Error loading leaderboard:', error);
+            //         showError('Failed to load leaderboard data');
+            //     });
+        }
+
+        function updateLeaderboard(players) {
+            const container = document.getElementById('leaderboardContainer');
+            
+            if (!players || players.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>No Data Yet</h2>
+                        <p>Points will appear here once tournaments are recorded</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort players by total points descending
+            players.sort((a, b) => b.total_points - a.total_points);
+
+            const tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Player</th>
+                            <th>Points</th>
+                            <th>Wins</th>
+                            <th>KO</th>
+                            <th>Played</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${players.map((player, index) => {
+                            const rank = index + 1;
+                            let rankClass = 'rank-other';
+                            if (rank === 1) rankClass = 'rank-1';
+                            else if (rank === 2) rankClass = 'rank-2';
+                            else if (rank === 3) rankClass = 'rank-3';
+
+                            return `
+                                <tr>
+                                    <td class="rank-cell">
+                                        <span class="${rankClass}">#${rank}</span>
+                                    </td>
+                                    <td>
+                                        <div class="player-cell">
+                                            <div class="avatar">
+                                                ${player.avatar || '👤'}
+                                            </div>
+                                            <span>${player.player_name}</span>
+                                        </div>
+                                    </td>
+                                    <td class="stat-cell stat-points">
+                                        ${player.total_points.toFixed(2)}
+                                    </td>
+                                    <td class="stat-cell stat-wins">
+                                        ${player.wins || 0}
+                                    </td>
+                                    <td class="stat-cell stat-ko">
+                                        ${player.knockouts || 0}
+                                    </td>
+                                    <td class="stat-cell stat-played">
+                                        ${player.tournaments_played || 0}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = tableHTML;
+        }
+
+        function showError(message) {
+            const container = document.getElementById('leaderboardContainer');
+            container.innerHTML = `
+                <div class="empty-state">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLeaderboardData();
+            
+            // Set up periodic refresh (every 30 seconds)
+            setInterval(loadLeaderboardData, 30000);
+        });
+    </script>
 </body>
 </html>
