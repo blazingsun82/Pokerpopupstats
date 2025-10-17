@@ -158,7 +158,6 @@
             background: linear-gradient(135deg, #d4a574, #b8885a);
         }
 
-        /* Champion and Runner-up special styling */
         .award-card:nth-child(1) {
             background: linear-gradient(135deg, rgba(139, 90, 43, 0.25) 0%, rgba(30, 30, 30, 0.95) 100%);
             border-color: rgba(212, 165, 116, 0.4);
@@ -222,7 +221,6 @@
             border: 1px solid rgba(139, 90, 43, 0.3);
         }
 
-        /* Special styling for Champion and Runner-up */
         .award-card:nth-child(1) .award-winner {
             color: #d4a574;
             font-size: 2.4em;
@@ -315,6 +313,13 @@
             animation: updatePulse 0.6s ease-in-out;
         }
 
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #b8885a;
+            font-size: 1.2em;
+        }
+
         @keyframes updatePulse {
             0% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.02); opacity: 0.9; }
@@ -357,15 +362,15 @@
     <div class="container">
         <div class="header">
             <div class="logo-container">
-                <img src="/static/logo.png" alt="Bingo Poker Pro's Logo" class="logo">
+                <img src="eskimos11.png" alt="Bingo Poker Pro's Logo" class="logo">
             </div>
             <h1>Bingo Poker Pro's Presents</h1>
-            <div class="tournament-info">{{ results.tournament_date }}</div>
+            <div class="tournament-info" id="tournamentDate">Loading tournament data...</div>
             <div class="live-indicator">
                 <span class="live-dot"></span>
                 Live Updates
             </div>
-            <a href="/leaderboard" class="leaderboard-link">
+            <a href="leaderboard.html" class="leaderboard-link">
                 Season Leaderboard
             </a>
         </div>
@@ -376,41 +381,26 @@
 
         <div class="awards-section">
             <div class="awards-grid" id="awardsGrid">
-                {% for title, award in results.awards.items() %}
-                <div class="award-card">
-                    <div class="award-title">
-                        <span class="award-emoji">{{ title.split()[0] }}</span>
-                        <span>{{ ' '.join(title.split()[1:]) }}</span>
-                    </div>
-                    <div class="award-winner">{{ award.winner }}</div>
-                    <div class="award-description">{{ award.description }}</div>
-                    <div class="award-stat">{{ award.stat }}</div>
-                </div>
-                {% endfor %}
+                <div class="loading">Loading tournament results...</div>
             </div>
         </div>
 
-        {% if results.preparation_h_club and results.preparation_h_club|length > 0 %}
-        <div class="special-section">
+        <div id="preparationHClub" style="display: none;" class="special-section">
             <h3>Preparation H Club</h3>
             <p style="margin-bottom: 20px; font-size: 1.1em;">
                 <em>"Had it on the flop... robbed on the river"</em>
             </p>
-            <ul class="bad-beat-list">
-                {% for bad_beat in results.preparation_h_club %}
-                <li>{{ bad_beat.victim }} lost {{ bad_beat.victim_hand }} to {{ bad_beat.winner }} with {{ bad_beat.winner_hand }}</li>
-                {% endfor %}
+            <ul class="bad-beat-list" id="badBeatsList">
             </ul>
         </div>
-        {% endif %}
 
         <div class="tournament-stats">
             <div class="stats-item">
-                <div class="stats-value">{{ results.total_players }}</div>
+                <div class="stats-value" id="totalPlayers">-</div>
                 <div>Players</div>
             </div>
             <div class="stats-item">
-                <div class="stats-value">{{ results.awards|length }}</div>
+                <div class="stats-value" id="totalAwards">-</div>
                 <div>Awards</div>
             </div>
             <div class="stats-item">
@@ -419,61 +409,78 @@
             </div>
             
             <div class="last-updated">
-                Last updated: <span id="lastUpdated">{{ results.tournament_date }}</span>
+                Last updated: <span id="lastUpdated">Never</span>
             </div>
         </div>
     </div>
 
     <script>
-        // Server-Sent Events for real-time updates
-        let eventSource;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-
-        function connectToUpdates() {
-            eventSource = new EventSource('/events');
-            
-            eventSource.onopen = function() {
-                console.log('Connected to live updates');
-                document.getElementById('connectionStatus').innerHTML = 'Connected';
-                reconnectAttempts = 0;
-            };
-
-            eventSource.onmessage = function(event) {
-                console.log('Received update:', event.data);
-            };
-
-            eventSource.addEventListener('init', function(event) {
-                console.log('Initial data received');
-                const data = JSON.parse(event.data);
-                updateBoard(data);
-            });
-
-            eventSource.addEventListener('update', function(event) {
-                console.log('Board update received');
-                const data = JSON.parse(event.data);
-                updateBoard(data, true);
-                
-                showUpdateNotification();
-            });
-
-            eventSource.onerror = function(event) {
-                console.log('SSE connection error');
-                document.getElementById('connectionStatus').innerHTML = 'Reconnecting...';
-                
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    setTimeout(() => {
-                        reconnectAttempts++;
-                        connectToUpdates();
-                    }, 2000);
-                } else {
-                    document.getElementById('connectionStatus').innerHTML = 'Offline';
+        // Sample data for testing - replace with actual API calls
+        const sampleData = {
+            tournament_date: "October 17, 2025",
+            total_players: 8,
+            awards: {
+                "🏆 Tournament Champion": {
+                    winner: "YourUsername",
+                    description: "Victory is sweet! Congratulations on the tournament win!",
+                    stat: "1st Place"
+                },
+                "🥈 Runner-up": {
+                    winner: "Player2",
+                    description: "So close to glory! An excellent second place finish.",
+                    stat: "2nd Place"
+                },
+                "🎭 Hollywood Actor": {
+                    winner: "Player3",
+                    description: "Master of deception and dramatic flair at the table.",
+                    stat: "Best Bluffer"
+                },
+                "📈 Comeback Kid": {
+                    winner: "Player4",
+                    description: "Rose from the ashes to claim victory from defeat.",
+                    stat: "Best Recovery"
+                },
+                "🎲 YOLO Award": {
+                    winner: "Player5",
+                    description: "Played with reckless abandon and maximum courage.",
+                    stat: "Biggest Risk Taker"
+                },
+                "🏊 Doggy Paddling Award": {
+                    winner: "Player6",
+                    description: "Struggled to stay afloat but kept fighting.",
+                    stat: "Shortest Stack Survival"
                 }
-            };
+            },
+            preparation_h_club: [
+                {
+                    victim: "UnluckyPlayer",
+                    victim_hand: "AA",
+                    winner: "LuckyPlayer", 
+                    winner_hand: "23o"
+                }
+            ]
+        };
+
+        function loadTournamentData() {
+            // For now, use sample data
+            // Later this will fetch from your D1 database via Functions
+            updateBoard(sampleData);
+            
+            // TODO: Replace with actual API call
+            // fetch('/api/tournament-data')
+            //     .then(response => response.json())
+            //     .then(data => updateBoard(data))
+            //     .catch(error => {
+            //         console.error('Error loading tournament data:', error);
+            //         showError('Failed to load tournament data');
+            //     });
         }
 
         function updateBoard(data, animate = false) {
             const awardsGrid = document.getElementById('awardsGrid');
+            const tournamentDateEl = document.getElementById('tournamentDate');
+            const totalPlayersEl = document.getElementById('totalPlayers');
+            const totalAwardsEl = document.getElementById('totalAwards');
             const lastUpdatedEl = document.getElementById('lastUpdated');
             
             if (animate) {
@@ -483,101 +490,71 @@
                 }, 600);
             }
             
-            awardsGrid.innerHTML = '';
-            Object.entries(data.awards).forEach(([title, award]) => {
-                const titleParts = title.split(' ');
-                const emoji = titleParts[0];
-                const titleText = titleParts.slice(1).join(' ');
-                
-                const cardEl = document.createElement('div');
-                cardEl.className = 'award-card';
-                cardEl.innerHTML = `
-                    <div class="award-title">
-                        <span class="award-emoji">${emoji}</span>
-                        <span>${titleText}</span>
-                    </div>
-                    <div class="award-winner">${award.winner}</div>
-                    <div class="award-description">${award.description}</div>
-                    <div class="award-stat">${award.stat}</div>
-                `;
-                awardsGrid.appendChild(cardEl);
-            });
+            // Update header info
+            tournamentDateEl.textContent = data.tournament_date;
             
-            lastUpdatedEl.textContent = data.tournament_date;
+            // Update awards grid
+            awardsGrid.innerHTML = '';
+            if (data.awards && Object.keys(data.awards).length > 0) {
+                Object.entries(data.awards).forEach(([title, award]) => {
+                    const titleParts = title.split(' ');
+                    const emoji = titleParts[0];
+                    const titleText = titleParts.slice(1).join(' ');
+                    
+                    const cardEl = document.createElement('div');
+                    cardEl.className = 'award-card';
+                    cardEl.innerHTML = `
+                        <div class="award-title">
+                            <span class="award-emoji">${emoji}</span>
+                            <span>${titleText}</span>
+                        </div>
+                        <div class="award-winner">${award.winner}</div>
+                        <div class="award-description">${award.description}</div>
+                        <div class="award-stat">${award.stat}</div>
+                    `;
+                    awardsGrid.appendChild(cardEl);
+                });
+            } else {
+                awardsGrid.innerHTML = '<div class="loading">No tournament data available</div>';
+            }
+            
+            // Update stats
+            totalPlayersEl.textContent = data.total_players || 0;
+            totalAwardsEl.textContent = Object.keys(data.awards || {}).length;
+            lastUpdatedEl.textContent = data.tournament_date || 'Never';
+            
+            // Update Preparation H Club
             updatePreparationHClub(data.preparation_h_club);
         }
 
         function updatePreparationHClub(preparationHClub) {
-            const existingSection = document.querySelector('.special-section');
-            if (existingSection) {
-                existingSection.remove();
-            }
+            const section = document.getElementById('preparationHClub');
+            const list = document.getElementById('badBeatsList');
             
             if (preparationHClub && preparationHClub.length > 0) {
-                const sectionHTML = `
-                    <div class="special-section">
-                        <h3>Preparation H Club</h3>
-                        <p style="margin-bottom: 20px; font-size: 1.1em;">
-                            <em>"Had it on the flop... robbed on the river"</em>
-                        </p>
-                        <ul class="bad-beat-list">
-                            ${preparationHClub.map(badBeat => 
-                                `<li>${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}</li>`
-                            ).join('')}
-                        </ul>
-                    </div>
-                `;
-                
-                const tournamentStats = document.querySelector('.tournament-stats');
-                tournamentStats.insertAdjacentHTML('beforebegin', sectionHTML);
+                list.innerHTML = '';
+                preparationHClub.forEach(badBeat => {
+                    const li = document.createElement('li');
+                    li.textContent = `${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}`;
+                    list.appendChild(li);
+                });
+                section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
             }
         }
 
-        function showUpdateNotification() {
-            const notification = document.createElement('div');
-            notification.innerHTML = 'Awards board updated!';
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #8b5a2b;
-                color: white;
-                padding: 15px 20px;
-                border-radius: 8px;
-                box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-                z-index: 1000;
-                font-weight: bold;
-                animation: slideIn 0.3s ease-out;
-            `;
-            
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-            `;
-            document.head.appendChild(style);
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.animation = 'slideIn 0.3s ease-out reverse';
-                setTimeout(() => {
-                    notification.remove();
-                    style.remove();
-                }, 300);
-            }, 3000);
+        function showError(message) {
+            const awardsGrid = document.getElementById('awardsGrid');
+            awardsGrid.innerHTML = `<div class="loading" style="color: #d48574;">${message}</div>`;
         }
 
+        // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
-            connectToUpdates();
-        });
-
-        window.addEventListener('beforeunload', function() {
-            if (eventSource) {
-                eventSource.close();
-            }
+            loadTournamentData();
+            
+            // Set up periodic refresh (every 30 seconds)
+            setInterval(loadTournamentData, 30000);
         });
     </script>
 </body>
