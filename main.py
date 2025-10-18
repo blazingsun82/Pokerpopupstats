@@ -761,7 +761,7 @@ class PokerAwardsParser:
         # Everyone else stays None (no specific position tracked)
     
     def _calculate_awards(self, players_data: Dict[str, Dict]) -> Dict[str, Dict]:
-        """Calculate fun club-style awards from parsed player data (FIXED VERSION)"""
+        """Calculate fun club-style awards from parsed player data (SAFER VERSION)"""
         players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
         
         if not players:
@@ -800,171 +800,112 @@ class PokerAwardsParser:
         aggressive_players = [(name, data) for name, data in players.items() 
                             if data.get('hands_played', 0) > 5 and name not in awarded_players]
         if aggressive_players:
-            most_aggressive = max(aggressive_players, 
-                                key=lambda x: x[1].get('aggressive_actions', 0) / max(x[1].get('hands_played', 1), 1))
-            awards["🔥 Most Aggressive"] = {
-                "winner": most_aggressive[0],
-                "description": "Fearless bets and raises kept everyone on edge",
-                "stat": "Never met a pot they didn't want to steal"
-            }
-            awarded_players.add(most_aggressive[0])
+            # Safe calculation with default values
+            best_aggressive = None
+            best_aggro_ratio = 0
+            for name, data in aggressive_players:
+                hands_played = max(data.get('hands_played', 1), 1)
+                aggressive_actions = data.get('aggressive_actions', 0)
+                ratio = aggressive_actions / hands_played
+                if ratio > best_aggro_ratio:
+                    best_aggro_ratio = ratio
+                    best_aggressive = (name, data)
+            
+            if best_aggressive:
+                awards["🔥 Most Aggressive"] = {
+                    "winner": best_aggressive[0],
+                    "description": "Fearless bets and raises kept everyone on edge",
+                    "stat": "Never met a pot they didn't want to steal"
+                }
+                awarded_players.add(best_aggressive[0])
         
         # Calling Station
         calling_candidates = [(name, data) for name, data in players.items()
                              if name not in awarded_players and data.get('hands_played', 0) > 5]
         if calling_candidates:
-            calling_station = max(calling_candidates,
-                                key=lambda x: x[1].get('calls', 0) / max(x[1].get('hands_played', 1), 1))
-            awards["📞 Calling Station"] = {
-                "winner": calling_station[0],
-                "description": "Never saw a bet they didn't want to call",
-                "stat": "The human slot machine"
-            }
-            awarded_players.add(calling_station[0])
+            # Safe calculation
+            best_caller = None
+            best_call_ratio = 0
+            for name, data in calling_candidates:
+                hands_played = max(data.get('hands_played', 1), 1)
+                calls = data.get('calls', 0)
+                ratio = calls / hands_played
+                if ratio > best_call_ratio:
+                    best_call_ratio = ratio
+                    best_caller = (name, data)
+            
+            if best_caller:
+                awards["📞 Calling Station"] = {
+                    "winner": best_caller[0],
+                    "description": "Never saw a bet they didn't want to call",
+                    "stat": "The human slot machine"
+                }
+                awarded_players.add(best_caller[0])
         
-        # Tightest Player (CORRECTED - excludes calling station winner)
+        # Tightest Player
         tight_candidates = [(name, data) for name, data in players.items()
                            if name not in awarded_players and data.get('hands_played', 0) > 5]
         if tight_candidates:
-            tightest = min(tight_candidates,
-                         key=lambda x: x[1].get('hands_voluntarily_played', 0) / max(x[1].get('hands_played', 1), 1))
-            awards["🧊 Tightest Player"] = {
-                "winner": tightest[0],
-                "description": "Plays only a small, selective number of hands and is not afraid to be aggressive with premium holdings",
-                "stat": "Classic tight-aggressive strategy"
-            }
-            awarded_players.add(tightest[0])
+            # Safe calculation
+            tightest_player = None
+            lowest_vpip = 1.0
+            for name, data in tight_candidates:
+                hands_played = max(data.get('hands_played', 1), 1)
+                hands_voluntary = data.get('hands_voluntarily_played', 0)
+                vpip = hands_voluntary / hands_played
+                if vpip < lowest_vpip:
+                    lowest_vpip = vpip
+                    tightest_player = (name, data)
+            
+            if tightest_player:
+                awards["🧊 Tightest Player"] = {
+                    "winner": tightest_player[0],
+                    "description": "Plays only a small, selective number of hands",
+                    "stat": "Classic tight-aggressive strategy"
+                }
+                awarded_players.add(tightest_player[0])
         
-        # YOLO Award - Biggest pot won with worst starting hand
+        # YOLO Award - Look for suckouts
         yolo_candidates = []
         for name, data in players.items():
             if name in awarded_players:
                 continue
             suckouts = data.get('suckouts', [])
-            for suckout in suckouts:
-                description = suckout.get('description', '').lower()
-                if any(bad_hand in description for bad_hand in ['7', '2', 'offsuit', 'unsuited']):
-                    yolo_candidates.append((name, suckout))
+            if suckouts:
+                yolo_candidates.append((name, suckouts[0]))
         
         if yolo_candidates:
-            yolo_winner = yolo_candidates[0]
             awards["🎲 YOLO Award"] = {
-                "winner": yolo_winner[0],
-                "description": "Biggest pot won with the worst starting hand",
+                "winner": yolo_candidates[0][0],
+                "description": "Biggest pot won with questionable starting hand",
                 "stat": "Sometimes you gotta risk it all"
             }
-            awarded_players.add(yolo_winner[0])
+            awarded_players.add(yolo_candidates[0][0])
         
-        # Comeback Kid - Largest comeback from smallest chip stack
-        comeback_candidates = []
-        if players:
-            min_chips = min(data.get('max_chips', 0) for data in players.values())
-            
-            for name, data in players.items():
-                if name in awarded_players:
-                    continue
-                final_pos = data.get('final_position')
-                if final_pos is not None and data.get('max_chips', 0) <= min_chips * 2 and final_pos <= len(players) // 2:
-                    comeback_score = (len(players) - final_pos) / max(data.get('max_chips', 1), 1)
-                    comeback_candidates.append((name, data, comeback_score))
-        
-        if comeback_candidates:
-            comeback_candidates.sort(key=lambda x: x[2], reverse=True)
-            comeback_king = comeback_candidates[0]
-            awards["🎯 Comeback Kid"] = {
-                "winner": comeback_king[0],
-                "description": "Largest comeback from the smallest chip stack",
-                "stat": "Rose from the ashes like a phoenix"
-            }
-            awarded_players.add(comeback_king[0])
-        
-        # Doggy Paddling Award - Consistently at bottom but survives
-        survivors = [(name, data) for name, data in players.items() 
-                    if name not in awarded_players and data.get('final_position', 999) > len(players) * 0.6]
-        
-        if survivors:
-            longest_survivor = max(survivors, 
-                                 key=lambda x: x[1].get('hands_played', 0))
-            awards["🐶💦 Doggy Paddling Award"] = {
-                "winner": longest_survivor[0],
-                "description": "Consistently hovers at the bottom but somehow stays alive longer than expected",
-                "stat": "Survival instincts kicked in"
-            }
-            awarded_players.add(longest_survivor[0])
-        
-        # Hollywood Actor (renamed from Biggest Bluffer)
+        # Hollywood Actor (Most bets without many showdowns)
         bluffer_candidates = [(name, data) for name, data in players.items() 
                             if name not in awarded_players and data.get('bets', 0) > 2]
         if bluffer_candidates:
-            hollywood_actor = max(bluffer_candidates,
-                                key=lambda x: x[1].get('bets', 0) / max(x[1].get('showdowns', 1), 1))
-            awards["🎭 Hollywood Actor"] = {
-                "winner": hollywood_actor[0],
-                "description": "Most bluffs attempted (successful or failed)",
-                "stat": "Master of deception and theatrics"
-            }
-            awarded_players.add(hollywood_actor[0])
-        
-        # 7-2 Special Award
-        bad_hand_winners = []
-        for name, data in players.items():
-            if name in awarded_players:
-                continue
-            suckouts = data.get('suckouts', [])
-            for suckout in suckouts:
-                winning_hand = suckout.get('winning_hand', '').lower()
-                if ('7' in winning_hand and '2' in winning_hand) or 'worst' in winning_hand.lower():
-                    bad_hand_winners.append((name, suckout))
-        
-        if bad_hand_winners:
-            awards["💩 7-2 Hero"] = {
-                "winner": bad_hand_winners[0][0],
-                "description": "Won with the infamous 7-2 offsuit",
-                "stat": "Turned trash into treasure"
-            }
-            awarded_players.add(bad_hand_winners[0][0])
-        
-        # Donkey (poor decision making)
-        donkey_candidates = []
-        for name, data in players.items():
-            if name in awarded_players:
-                continue
-            hands_played = data.get('hands_played', 0)
-            if hands_played > 10:
-                vpip = data.get('hands_voluntarily_played', 0) / hands_played
-                win_rate = data.get('showdown_wins', 0) / max(data.get('showdowns', 1), 1)
-                
-                if vpip > 0.4 and win_rate < 0.3:
-                    donkey_score = vpip / (win_rate + 0.1)
-                    donkey_candidates.append((name, data, donkey_score))
-        
-        if donkey_candidates:
-            donkey_candidates.sort(key=lambda x: x[2], reverse=True)
-            worst_player = donkey_candidates[0]
+            # Safe calculation
+            best_bluffer = None
+            best_bluff_ratio = 0
+            for name, data in bluffer_candidates:
+                bets = data.get('bets', 0)
+                showdowns = max(data.get('showdowns', 1), 1)
+                ratio = bets / showdowns
+                if ratio > best_bluff_ratio:
+                    best_bluff_ratio = ratio
+                    best_bluffer = (name, data)
             
-            if worst_player[2] > 1.5:
-                awards["🐴 Donkey"] = {
-                    "winner": worst_player[0],
-                    "description": "Made questionable decisions and played too many weak hands",
-                    "stat": f"Played {int(worst_player[1].get('hands_voluntarily_played', 0) / worst_player[1].get('hands_played', 1) * 100)}% of hands with poor results"
+            if best_bluffer:
+                awards["🎭 Hollywood Actor"] = {
+                    "winner": best_bluffer[0],
+                    "description": "Most bluffs attempted (successful or failed)",
+                    "stat": "Master of deception and theatrics"
                 }
-                awarded_players.add(worst_player[0])
+                awarded_players.add(best_bluffer[0])
         
-        # ABC Player
-        abc_candidates = [(name, data) for name, data in players.items()
-                        if name not in awarded_players and data.get('hands_played', 0) > 5 and 
-                        0.15 < (data.get('aggressive_actions', 0) / data.get('hands_played', 1)) < 0.35]
-        if abc_candidates:
-            abc_player = max(abc_candidates, 
-                           key=lambda x: x[1].get('showdown_wins', 0))
-            awards["📚 ABC Player"] = {
-                "winner": abc_player[0],
-                "description": "Played textbook poker, predictable as clockwork",
-                "stat": "By-the-book basic strategy"
-            }
-            awarded_players.add(abc_player[0])
-        
-        # Bubble Boy (placement award - also EXEMPT)
+        # Bubble Boy (placement award - EXEMPT from one-award restriction)
         if len(players) >= 4:
             bubble_position = (len(players) + 1) // 2
             bubble_candidates = [p for p in players.items() 
@@ -972,10 +913,9 @@ class PokerAwardsParser:
             if bubble_candidates:
                 awards["💀 Bubble Boy"] = {
                     "winner": bubble_candidates[0][0],
-                    "description": "Knocked out just before the money in heartbreaking fashion",
+                    "description": "Knocked out just before the money",
                     "stat": "So close to cashing, yet so far"
                 }
-                # DON'T add to awarded_players - placement award is exempt
         
         return awards
     
