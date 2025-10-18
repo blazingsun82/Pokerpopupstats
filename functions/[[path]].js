@@ -26,8 +26,10 @@ export default {
       } else if (path === '/upload/bingo-poker-secret-2025' && request.method === 'GET') {
         return handleUploadPage(corsHeaders);
       } else if (path === '/upload/process' && request.method === 'POST') {
+        console.log('Upload process POST request received');
         return await handleTournamentUpload(request, env, corsHeaders);
       } else if (path === '/upload/bingo-poker-secret-2025/process' && request.method === 'POST') {
+        console.log('Upload process POST request received (secret path)');
         return await handleTournamentUpload(request, env, corsHeaders);
       } else if (path === '/api/tournament-data' && request.method === 'GET') {
         console.log('API tournament data request');
@@ -47,9 +49,26 @@ export default {
       } else if (path === '/admin/admin-control-2025' && request.method === 'GET') {
         return handleAdminPage(corsHeaders);
       } else {
-        return new Response('Not Found', { 
+        console.log('No route matched for:', path, request.method);
+        console.log('Available routes:');
+        console.log('GET /, /upload, /upload/bingo-poker-secret-2025, /leaderboard, /admin/admin-control-2025');
+        console.log('POST /upload/process, /upload/bingo-poker-secret-2025/process');
+        console.log('GET /api/tournament-data, /api/players-data');
+        console.log('POST /api/upload-points, /api/update-avatar, /api/edit-player, /api/reset-all-points');
+        
+        return new Response(JSON.stringify({
+          error: 'Route not found',
+          path: path,
+          method: request.method,
+          availableRoutes: [
+            'GET /',
+            'GET /upload',
+            'POST /upload/process',
+            'GET /api/tournament-data'
+          ]
+        }), { 
           status: 404,
-          headers: corsHeaders 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
     } catch (error) {
@@ -296,11 +315,19 @@ function handleAdminPage(corsHeaders) {
 // Tournament upload handler
 async function handleTournamentUpload(request, env, corsHeaders) {
   try {
+    console.log('Tournament upload handler called');
+    console.log('Request method:', request.method);
+    console.log('Content-Type:', request.headers.get('content-type'));
+    
     const formData = await request.formData();
+    console.log('FormData received');
+    
     const file = formData.get('file');
     
     if (!file) {
+      console.log('No file in formData');
       return new Response(JSON.stringify({
+        success: false,
         error: 'No file uploaded'
       }), {
         status: 400,
@@ -308,14 +335,18 @@ async function handleTournamentUpload(request, env, corsHeaders) {
       });
     }
 
+    console.log('File received:', file.name, 'Size:', file.size);
     const fileContent = await file.text();
-    console.log('File content received:', fileContent.substring(0, 200) + '...');
+    console.log('File content length:', fileContent.length);
+    console.log('File content preview:', fileContent.substring(0, 200) + '...');
     
     const parsedData = parseTournament(fileContent);
     console.log('Parsed data:', JSON.stringify(parsedData, null, 2));
     
     // Save to D1 database
+    console.log('Saving to database...');
     await saveTournamentToD1(env.DB, parsedData);
+    console.log('Database save completed');
     
     return new Response(JSON.stringify({
       success: true,
@@ -328,7 +359,9 @@ async function handleTournamentUpload(request, env, corsHeaders) {
     
   } catch (error) {
     console.error('Tournament upload error:', error);
+    console.error('Error stack:', error.stack);
     return new Response(JSON.stringify({
+      success: false,
       error: error.message || 'Upload failed',
       stack: error.stack
     }), {
