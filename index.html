@@ -427,13 +427,13 @@
             connectionStatus.className = 'stats-value connection-status loading';
 
             try {
-                console.log('Fetching tournament data from Render...');
+                console.log('Fetching tournament data from Cloudflare Functions...');
                 
-                // Fetch tournament data from Render backend
-                const response = await fetch('https://pokerpopupstats.onrender.com/', {
+                // Fetch tournament data from Cloudflare Functions
+                const response = await fetch('/api/tournament-data', {
                     method: 'GET',
                     headers: {
-                        'Accept': 'text/html',
+                        'Accept': 'application/json',
                         'Cache-Control': 'no-cache'
                     }
                 });
@@ -442,18 +442,15 @@
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                const html = await response.text();
-                console.log('Received HTML response, parsing...');
-                
-                const data = extractDataFromHTML(html);
+                const data = await response.json();
+                console.log('Successfully received tournament data:', data);
                 
                 if (data && data.awards && Object.keys(data.awards).length > 0) {
-                    console.log('Successfully extracted tournament data:', data);
                     updateBoard(data);
                     connectionStatus.textContent = 'Connected';
                     connectionStatus.className = 'stats-value';
                 } else {
-                    console.log('No real tournament data found, showing fallback');
+                    console.log('No tournament data found, showing fallback');
                     throw new Error('No tournament data available - showing fallback');
                 }
 
@@ -464,105 +461,6 @@
                 
                 // Show fallback content
                 showFallbackContent();
-            }
-        }
-
-        function extractDataFromHTML(html) {
-            try {
-                console.log('Parsing HTML response...');
-                
-                // Create a temporary DOM to parse the HTML response
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                // Check if this is actually a tournament results page
-                const title = doc.querySelector('title');
-                if (!title || !title.textContent.includes('Poker')) {
-                    console.log('Not a poker results page');
-                    return null;
-                }
-                
-                // Extract tournament date
-                const tournamentDateEl = doc.querySelector('.tournament-info');
-                const tournament_date = tournamentDateEl ? tournamentDateEl.textContent.trim() : new Date().toLocaleDateString();
-                console.log('Tournament date:', tournament_date);
-                
-                // Extract awards data - look for award cards
-                const awards = {};
-                const awardCards = doc.querySelectorAll('.award-card');
-                console.log('Found award cards:', awardCards.length);
-                
-                awardCards.forEach((card, index) => {
-                    const titleEl = card.querySelector('.award-title');
-                    const winnerEl = card.querySelector('.award-winner');
-                    const descEl = card.querySelector('.award-description');
-                    const statEl = card.querySelector('.award-stat');
-                    
-                    if (titleEl && winnerEl) {
-                        const title = titleEl.textContent.trim();
-                        const winner = winnerEl.textContent.trim();
-                        
-                        // Skip if this looks like sample/placeholder data
-                        if (winner.includes('Player') || winner === 'No Live Data' || winner === '-') {
-                            console.log('Skipping placeholder data:', winner);
-                            return;
-                        }
-                        
-                        awards[title] = {
-                            winner: winner,
-                            description: descEl ? descEl.textContent.trim() : '',
-                            stat: statEl ? statEl.textContent.trim() : ''
-                        };
-                        console.log(`Award ${index + 1}:`, title, '->', winner);
-                    }
-                });
-
-                // Extract bad beats from Preparation H Club section
-                const preparation_h_club = [];
-                const badBeatsSection = doc.querySelector('.special-section');
-                if (badBeatsSection) {
-                    const badBeatsList = badBeatsSection.querySelector('.bad-beat-list');
-                    if (badBeatsList) {
-                        const badBeats = badBeatsList.querySelectorAll('li');
-                        badBeats.forEach(beat => {
-                            const text = beat.textContent.trim();
-                            if (text && !text.includes('placeholder')) {
-                                preparation_h_club.push({ description: text });
-                            }
-                        });
-                    }
-                }
-
-                // Extract total players from stats
-                const statsElements = doc.querySelectorAll('.stats-value');
-                let total_players = 0;
-                statsElements.forEach(el => {
-                    const text = el.textContent.trim();
-                    if (!isNaN(text) && parseInt(text) > 0) {
-                        total_players = parseInt(text);
-                    }
-                });
-
-                const result = {
-                    tournament_date,
-                    total_players: total_players || Object.keys(awards).length,
-                    awards,
-                    preparation_h_club
-                };
-                
-                console.log('Extracted data:', result);
-                
-                // Only return data if we found real awards (not empty or placeholder)
-                if (Object.keys(awards).length > 0) {
-                    return result;
-                } else {
-                    console.log('No real awards found in HTML');
-                    return null;
-                }
-
-            } catch (error) {
-                console.error('Error parsing HTML:', error);
-                return null;
             }
         }
 
@@ -675,7 +573,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadTournamentData();
             
-            // Set up periodic refresh (every 2 minutes to avoid waking sleeping backend too often)
+            // Set up periodic refresh (every 2 minutes)
             setInterval(loadTournamentData, 120000);
         });
     </script>
