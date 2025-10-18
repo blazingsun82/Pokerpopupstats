@@ -1,0 +1,7 @@
+name = "poker-awards"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pokerstats-db"
+database_id = "7e5a8a63-ef95-481c-bec6-c98f92990963"
