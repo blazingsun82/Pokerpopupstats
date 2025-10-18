@@ -21,8 +21,12 @@ export default {
       // Route handling
       if (path === '/' && request.method === 'GET') {
         return await handleMainPage(env, corsHeaders);
+      } else if (path === '/upload' && request.method === 'GET') {
+        return handleUploadPage(corsHeaders);
       } else if (path === '/upload/bingo-poker-secret-2025' && request.method === 'GET') {
         return handleUploadPage(corsHeaders);
+      } else if (path === '/upload/process' && request.method === 'POST') {
+        return await handleTournamentUpload(request, env, corsHeaders);
       } else if (path === '/upload/bingo-poker-secret-2025/process' && request.method === 'POST') {
         return await handleTournamentUpload(request, env, corsHeaders);
       } else if (path === '/api/tournament-data' && request.method === 'GET') {
@@ -183,20 +187,25 @@ function handleUploadPage(corsHeaders) {
             formData.append('file', file);
             
             try {
-                const response = await fetch('/upload/bingo-poker-secret-2025/process', {
+                const response = await fetch('/upload/process', {
                     method: 'POST',
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    throw new Error(\`HTTP \${response.status}\`);
+                }
+                
                 const result = await response.json();
                 
-                if (response.ok) {
+                if (result.success) {
                     showMessage('Tournament uploaded successfully!', 'success');
                     setTimeout(() => { window.location.href = '/'; }, 2000);
                 } else {
                     showMessage(\`Error: \${result.error}\`, 'error');
                 }
             } catch (error) {
+                console.error('Upload error:', error);
                 showMessage(\`Upload failed: \${error.message}\`, 'error');
             }
         }
