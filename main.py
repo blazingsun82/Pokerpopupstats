@@ -29,9 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Templates and static files
-templates = Jinja2Templates(directory="templates")
-
+# Templates and static files="
+templates = Jinja2Templates(directory=".")
 # Only mount static files if directory exists
 if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -1029,7 +1028,7 @@ def save_results(data):
 async def public_board(request: Request):
     """Public awards board"""
     results = load_results()
-    return templates.TemplateResponse("board.html", {
+    return templates.TemplateResponse("index.html", {
         "request": request,
         "results": results,
         "is_public": True
