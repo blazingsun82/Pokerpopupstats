@@ -357,7 +357,7 @@
             </div>
             <div class="control-group">
                 <label>Avatar Path</label>
-                <input type="text" id="avatarPath" placeholder="/static/eskimos11.png">
+                <input type="text" id="avatarPath" placeholder="images/eskimos11.png">
             </div>
             <button onclick="updateAvatar()" class="btn btn-success">Update Avatar</button>
         </div>
@@ -400,32 +400,68 @@
     </div>
 
     <script>
-        function loadPlayers() {
-            // Fetch from your actual leaderboard endpoint
-            fetch('/leaderboard')
-                .then(response => response.text())
-                .then(html => {
-                    // For now, show a message that data is loaded from backend
-                    const tbody = document.getElementById('playersTableBody');
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="8" style="text-align: center; padding: 40px; color: #b8885a;">
-                                Player data loaded from backend. Upload points or edit individual players below.
-                            </td>
-                        </tr>
-                    `;
-                })
-                .catch(error => {
-                    console.error('Error loading players:', error);
-                    const tbody = document.getElementById('playersTableBody');
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="8" style="text-align: center; padding: 40px; color: #d48574;">
-                                Error loading player data
-                            </td>
-                        </tr>
-                    `;
-                });
+        // Updated to use Cloudflare Functions endpoints instead of Render
+        async function loadPlayers() {
+            try {
+                // Fetch from Cloudflare D1 API endpoint
+                const response = await fetch('/api/players-data');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const players = await response.json();
+                displayPlayers(players);
+                
+            } catch (error) {
+                console.error('Error loading players:', error);
+                const tbody = document.getElementById('playersTableBody');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #d48574;">
+                            Error loading player data: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function displayPlayers(players) {
+            const tbody = document.getElementById('playersTableBody');
+            
+            if (!players || players.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #b8885a;">
+                            No players found. Upload some tournament data first.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = players.map((player, index) => `
+                <tr>
+                    <td class="player-rank">#${index + 1}</td>
+                    <td>
+                        ${player.avatar ? 
+                            `<img src="${player.avatar}" alt="${player.player_name}" class="player-avatar">` :
+                            `<div class="player-avatar" style="background: linear-gradient(45deg, #8b5a2b, #d4a574); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${player.player_name.charAt(0).toUpperCase()}</div>`
+                        }
+                    </td>
+                    <td><strong>${player.player_name}</strong></td>
+                    <td><span class="stat-badge">${player.total_points.toFixed(2)}</span></td>
+                    <td><span class="stat-badge">${player.wins || 0}</span></td>
+                    <td><span class="stat-badge">${player.knockouts || 0}</span></td>
+                    <td><span class="stat-badge">${player.tournaments_played || 0}</span></td>
+                    <td>
+                        <input type="number" class="edit-input" id="points-${index}" placeholder="0" step="0.01">
+                        <input type="number" class="edit-input edit-input-small" id="wins-${index}" placeholder="0">
+                        <input type="number" class="edit-input edit-input-small" id="kos-${index}" placeholder="0">
+                        <button class="btn btn-primary" onclick="editPlayer('${player.player_name}', ${index})">Add</button>
+                    </td>
+                </tr>
+            `).join('');
         }
 
         async function uploadPoints() {
@@ -446,8 +482,8 @@
             formData.append('file', file);
 
             try {
-                // Call your actual points upload endpoint
-                const response = await fetch('/upload/bingo-poker-secret-2025/points', {
+                // Updated to use Cloudflare Functions endpoint
+                const response = await fetch('/api/upload-points', {
                     method: 'POST',
                     body: formData
                 });
@@ -459,7 +495,7 @@
                     fileInput.value = '';
                     loadPlayers(); // Reload the player table
                 } else {
-                    showError(`Error: ${result.detail || 'Upload failed'}`);
+                    showError(`Error: ${result.error || 'Upload failed'}`);
                 }
             } catch (error) {
                 showError('Upload failed: ' + error.message);
@@ -467,23 +503,25 @@
         }
 
         async function updateAvatar() {
-            const playerName = document.getElementById('avatarPlayerName').value;
-            const avatarPath = document.getElementById('avatarPath').value;
+            const playerName = document.getElementById('avatarPlayerName').value.trim();
+            const avatarPath = document.getElementById('avatarPath').value.trim();
             
             if (!playerName || !avatarPath) {
                 showError('Please fill in both player name and avatar path');
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('player_name', playerName);
-            formData.append('avatar', avatarPath);
-
             try {
-                // Call your actual avatar update endpoint
-                const response = await fetch('/admin/admin-control-2025/update-avatar', {
+                // Updated to use Cloudflare Functions endpoint
+                const response = await fetch('/api/update-avatar', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        player_name: playerName,
+                        avatar: avatarPath
+                    })
                 });
 
                 const result = await response.json();
@@ -494,34 +532,53 @@
                     document.getElementById('avatarPath').value = '';
                     loadPlayers(); // Reload the player table
                 } else {
-                    showError(`Error: ${result.detail || 'Update failed'}`);
+                    showError(`Error: ${result.error || 'Update failed'}`);
                 }
             } catch (error) {
                 showError('Update failed: ' + error.message);
             }
         }
 
-        async function editPlayer(playerName, points, wins, knockouts) {
-            const formData = new FormData();
-            formData.append('player_name', playerName);
-            formData.append('points', points);
-            formData.append('wins', wins);
-            formData.append('knockouts', knockouts);
+        async function editPlayer(playerName, index) {
+            const pointsInput = document.getElementById(`points-${index}`);
+            const winsInput = document.getElementById(`wins-${index}`);
+            const kosInput = document.getElementById(`kos-${index}`);
+            
+            const points = parseFloat(pointsInput.value) || 0;
+            const wins = parseInt(winsInput.value) || 0;
+            const knockouts = parseInt(kosInput.value) || 0;
+            
+            if (points === 0 && wins === 0 && knockouts === 0) {
+                showError('Please enter at least one value to add');
+                return;
+            }
 
             try {
-                // Call your actual edit endpoint
-                const response = await fetch('/admin/admin-control-2025/edit', {
+                // Updated to use Cloudflare Functions endpoint
+                const response = await fetch('/api/edit-player', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        player_name: playerName,
+                        points: points,
+                        wins: wins,
+                        knockouts: knockouts
+                    })
                 });
 
                 const result = await response.json();
 
                 if (response.ok) {
                     showSuccess(`Updated ${playerName}: +${points} points, +${wins} wins, +${knockouts} KOs`);
+                    // Clear the input fields
+                    pointsInput.value = '';
+                    winsInput.value = '';
+                    kosInput.value = '';
                     loadPlayers(); // Reload the player table
                 } else {
-                    showError(`Error: ${result.detail || 'Edit failed'}`);
+                    showError(`Error: ${result.error || 'Edit failed'}`);
                 }
             } catch (error) {
                 showError('Edit failed: ' + error.message);
@@ -534,8 +591,8 @@
             }
 
             try {
-                // Call your actual reset endpoint
-                const response = await fetch('/admin/admin-control-2025/reset', {
+                // Updated to use Cloudflare Functions endpoint
+                const response = await fetch('/api/reset-all-points', {
                     method: 'POST'
                 });
 
@@ -545,7 +602,7 @@
                     showSuccess('All player points have been reset');
                     loadPlayers(); // Reload the player table
                 } else {
-                    showError(`Error: ${result.detail || 'Reset failed'}`);
+                    showError(`Error: ${result.error || 'Reset failed'}`);
                 }
             } catch (error) {
                 showError('Reset failed: ' + error.message);
