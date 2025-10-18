@@ -1,4 +1,362 @@
-// Cloudflare Functions - Tournament Processor
+calculateAwards(playersData) {
+    const players = Object.fromEntries(
+      Object.entries(playersData).filter(([k]) => k !== 'tournament_info')
+    );
+    
+    if (Object.keys(players).length === 0) {
+      return {};
+    }
+    
+    const awards = {};
+    const awardedPlayers = new Set();
+    
+    // PLACEMENT AWARDS
+    
+    // Tournament Champion (1st place)
+    const championCandidates = Object.entries(players).filter(([, data]) => data.final_position === 1);
+    if (championCandidates.length > 0) {
+      const [championName] = championCandidates[0];
+      awards['🏆 Tournament Champion'] = {
+        winner: championName,
+        description: 'Survived the chaos and claimed the crown',
+        stat: `Outlasted ${Object.keys(players).length - 1} other players`
+      };
+    }
+    
+    // Runner Up (2nd place)
+    const runnerUpCandidates = Object.entries(players).filter(([, data]) => data.final_position === 2);
+    if (runnerUpCandidates.length > 0) {
+      const [runnerUpName] = runnerUpCandidates[0];
+      awards['🥈 Runner Up'] = {
+        winner: runnerUpName,
+        description: 'So close to glory, yet so far',
+        stat: 'Heads-up warrior'
+      };
+    }
+    
+    // BEHAVIORAL AWARDS
+    
+    // Most Aggressive
+    const aggressivePlayers = Object.entries(players).filter(([name, data]) => 
+      (data.hands_played || 0) > 5 && !awardedPlayers.has(name)
+    );
+    
+    if (aggressivePlayers.length > 0) {
+      let bestAggressive = null;
+      let bestAggroRatio = 0;
+      
+      aggressivePlayers.forEach(([name, data]) => {
+        const handsPlayed = Math.max(data.hands_played || 1, 1);
+        const aggressiveActions = data.aggressive_actions || 0;
+        const ratio = aggressiveActions / handsPlayed;
+        
+        if (ratio > bestAggroRatio) {
+          bestAggroRatio = ratio;
+          bestAggressive = name;
+        }
+      });
+      
+      if (bestAggressive) {
+        awards['🔥 Most Aggressive'] = {
+          winner: bestAggressive,
+          description: 'Fearless bets and raises kept everyone on edge',
+          stat: 'Never met a pot they didn\'t want to steal'
+        };
+        awardedPlayers.add(bestAggressive);
+      }
+    }
+    
+    // Calling Station
+    const callingCandidates = Object.entries(players).filter(([name, data]) => 
+      !awardedPlayers.has(name) && (data.hands_played || 0) > 5
+    );
+    
+    if (callingCandidates.length > 0) {
+      let bestCaller = null;
+      let bestCallRatio = 0;
+      
+      callingCandidates.forEach(([name, data]) => {
+        const handsPlayed = Math.max(data.hands_played || 1, 1);
+        const calls = data.calls || 0;
+        const ratio = calls / handsPlayed;
+        
+        if (ratio > bestCallRatio) {
+          bestCallRatio = ratio;
+          bestCaller = name;
+        }
+      });
+      
+      if (bestCaller) {
+        awards['📞 Calling Station'] = {
+          winner: bestCaller,
+          description: 'Never saw a bet they didn\'t want to call',
+          stat: 'The human slot machine'
+        };
+        awardedPlayers.add(bestCaller);
+      }
+    }
+    
+    // Tightest Player
+    const tightCandidates = Object.entries(players).filter(([name, data]) => 
+      !awardedPlayers.has(name) && (data.hands_played || 0) > 5
+    );
+    
+    if (tightCandidates.length > 0) {
+      let tightestPlayer = null;
+      let lowestVpip = 1.0;
+      
+      tightCandidates.forEach(([name, data]) => {
+        const handsPlayed = Math.max(data.hands_played || 1, 1);
+        const handsVoluntary = data.hands_voluntarily_played || 0;
+        const vpip = handsVoluntary / handsPlayed;
+        
+        if (vpip < lowestVpip) {
+          lowestVpip = vpip;
+          tightestPlayer = name;
+        }
+      });
+      
+      if (tightestPlayer) {
+        awards['🧊 Tightest Player'] = {
+          winner: tightestPlayer,
+          description: 'Plays only a small, selective number of hands',
+          stat: 'Classic tight-aggressive strategy'
+        };
+        awardedPlayers.add(tightestPlayer);
+      }
+    }
+    
+    // Comeback Kid - Largest comeback from smallest chip stack
+    const comebackCandidates = [];
+    const allChips = Object.values(players).map(data => data.max_chips || 0).filter(chips => chips > 0);
+    if (allChips.length > 0) {
+      const minChips = Math.min(...allChips);
+      
+      Object.entries(players).forEach(([name, data]) => {
+        if (awardedPlayers.has(name)) return;
+        
+        const finalPos = data.final_position;
+        const maxChips = data.max_chips || 0;
+        
+        if (finalPos !== null && maxChips <= minChips * 2 && finalPos <= Object.keys(players).length / 2) {
+          const comebackScore = (Object.keys(players).length - finalPos) / Math.max(maxChips, 1);
+          comebackCandidates.push([name, comebackScore]);
+        }
+      });
+    }
+    
+    if (comebackCandidates.length > 0) {
+      comebackCandidates.sort((a, b) => b[1] - a[1]);
+      const comebackKing = comebackCandidates[0][0];
+      
+      awards['🎯 Comeback Kid'] = {
+        winner: comebackKing,
+        description: 'Largest comeback from the smallest chip stack',
+        stat: 'Rose from the ashes like a phoenix'
+      };
+      awardedPlayers.add(comebackKing);
+    }
+    
+    // YOLO Award - Biggest pot won with questionable starting hand
+    const yoloCandidates = [];
+    Object.entries(players).forEach(([name, data]) => {
+      if (awardedPlayers.has(name)) return;
+      
+      const suckouts = data.suckouts || [];
+      suckouts.forEach(suckout => {
+        const description = (suckout.description || '').toLowerCase();
+        if (['7', '2', 'offsuit', 'unsuited'].some(badHand => description.includes(badHand))) {
+          yoloCandidates.push([name, suckout]);
+        }
+      });
+    });
+    
+    if (yoloCandidates.length > 0) {
+      const yoloWinner = yoloCandidates[0][0];
+      awards['🎲 YOLO Award'] = {
+        winner: yoloWinner,
+        description: 'Biggest pot won with the worst starting hand',
+        stat: 'Sometimes you gotta risk it all'
+      };
+      awardedPlayers.add(yoloWinner);
+    }
+    
+    // Doggy Paddling Award - Survives longer than expected
+    const survivors = Object.entries(players).filter(([name, data]) => 
+      !awardedPlayers.has(name) && (data.final_position || 999) > Object.keys(players).length * 0.6
+    );
+    
+    if (survivors.length > 0) {
+      let longestSurvivor = null;
+      let mostHands = 0;
+      
+      survivors.forEach(([name, data]) => {
+        const handsPlayed = data.hands_played || 0;
+        if (handsPlayed > mostHands) {
+          mostHands = handsPlayed;
+          longestSurvivor = name;
+        }
+      });
+      
+      if (longestSurvivor) {
+        awards['🐶💦 Doggy Paddling Award'] = {
+          winner: longestSurvivor,
+          description: 'Consistently hovers at the bottom but somehow stays alive longer than expected',
+          stat: 'Survival instincts kicked in'
+        };
+        awardedPlayers.add(longestSurvivor);
+      }
+    }
+    
+    // Hollywood Actor (Most bets without many showdowns)
+    const blufferCandidates = Object.entries(players).filter(([name, data]) => 
+      !awardedPlayers.has(name) && (data.bets || 0) > 2
+    );
+    
+    if (blufferCandidates.length > 0) {
+      let bestBluffer = null;
+      let bestBluffRatio = 0;
+      
+      blufferCandidates.forEach(([name, data]) => {
+        const bets = data.bets || 0;
+        const showdowns = Math.max(data.showdowns || 1, 1);
+        const ratio = bets / showdowns;
+        
+        if (ratio > bestBluffRatio) {
+          bestBluffRatio = ratio;
+          bestBluffer = name;
+        }
+      });
+      
+      if (bestBluffer) {
+        awards['🎭 Hollywood Actor'] = {
+          winner: bestBluffer,
+          description: 'Most bluffs attempted (successful or failed)',
+          stat: 'Master of deception and theatrics'
+        };
+        awardedPlayers.add(bestBluffer);
+      }
+    }
+    
+    // 7-2 Hero - Won with worst possible hand
+    const badHandWinners = [];
+    Object.entries(players).forEach(([name, data]) => {
+      if (awardedPlayers.has(name)) return;
+      
+      const suckouts = data.suckouts || [];
+      suckouts.forEach(suckout => {
+        const winningHand = (suckout.winning_hand || '').toLowerCase();
+        if ((winningHand.includes('7') && winningHand.includes('2')) || winningHand.includes('worst')) {
+          badHandWinners.push([name, suckout]);
+        }
+      });
+    });
+    
+    if (badHandWinners.length > 0) {
+      const heroWinner = badHandWinners[0][0];
+      awards['💩 7-2 Hero'] = {
+        winner: heroWinner,
+        description: 'Won with the infamous 7-2 offsuit',
+        stat: 'Turned trash into treasure'
+      };
+      awardedPlayers.add(heroWinner);
+    }
+    
+    // Donkey (poor decision making)
+    const donkeyCandidates = [];
+    Object.entries(players).forEach(([name, data]) => {
+      if (awardedPlayers.has(name)) return;
+      
+      const handsPlayed = data.hands_played || 0;
+      if (handsPlayed > 10) {
+        const vpip = (data.hands_voluntarily_played || 0) / handsPlayed;
+        const winRate = (data.showdown_wins || 0) / Math.max(data.showdowns || 1, 1);
+        
+        if (vpip > 0.4 && winRate < 0.3) {
+          const donkeyScore = vpip / (winRate + 0.1);
+          donkeyCandidates.push([name, donkeyScore, vpip]);
+        }
+      }
+    });
+    
+    if (donkeyCandidates.length > 0) {
+    if (donkeyCandidates.length > 0) {
+      donkeyCandidates.sort((a, b) => b[1] - a[1]);
+      const worstPlayer = donkeyCandidates[0];
+      
+      if (worstPlayer[1] > 1.5) {
+        awards['🐴 Donkey'] = {
+          winner: worstPlayer[0],
+          description: 'Made questionable decisions and played too many weak hands',
+          stat: `Played ${Math.round(worstPlayer[2] * 100)}% of hands with poor results`
+        };
+        awardedPlayers.add(worstPlayer[0]);
+      }
+    }
+    
+    // ABC Player
+    const abcCandidates = Object.entries(players).filter(([name, data]) => {
+      if (awardedPlayers.has(name) || (data.hands_played || 0) <= 5) return false;
+      
+      const aggroRatio = (data.aggressive_actions || 0) / (data.hands_played || 1);
+      return aggroRatio > 0.15 && aggroRatio < 0.35;
+    });
+    
+    if (abcCandidates.length > 0) {
+      let bestAbc = null;
+      let mostShowdownWins = 0;
+      
+      abcCandidates.forEach(([name, data]) => {
+        const showdownWins = data.showdown_wins || 0;
+        if (showdownWins > mostShowdownWins) {
+          mostShowdownWins = showdownWins;
+          bestAbc = name;
+        }
+      });
+      
+      if (bestAbc) {
+        awards['📚 ABC Player'] = {
+          winner: bestAbc,
+          description: 'Played textbook poker, predictable as clockwork',
+          stat: 'By-the-book basic strategy'
+        };
+        awardedPlayers.add(bestAbc);
+      }
+    }
+    
+    // Bubble Boy (placement award - EXEMPT from one-award restriction)
+    if (Object.keys(players).length >= 4) {
+      const bubblePosition = Math.floor((Object.keys(players).length + 1) / 2);
+      const bubbleCandidates = Object.entries(players).filter(([, data]) => 
+        data.final_position === bubblePosition
+      );
+      
+      if (bubbleCandidates.length > 0) {
+        awards['💀 Bubble Boy'] = {
+          winner: bubbleCandidates[0][0],
+          description: 'Knocked out just before the money in heartbreaking fashion',
+          stat: 'So close to cashing, yet so far'
+        };
+      }
+    }
+    
+    return awards;
+  }
+}
+
+function generateEmptyTournamentData() {
+  return {
+    tournament_date: new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', month: 'long', day: 'numeric', 
+      hour: 'numeric', minute: '2-digit' 
+    }),
+    tournament_id: 'No tournaments yet',
+    total_players: 0,
+    awards: {},
+    preparation_h_club: [],
+    last_updated: new Date().toISOString()
+  };
+}// Cloudflare Functions - Tournament Processor
 // Replaces the Python main.py with JavaScript for Cloudflare
 
 export default {
