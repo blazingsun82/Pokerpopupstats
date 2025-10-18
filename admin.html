@@ -325,10 +325,10 @@
             <p>Manage player points, wins, knockouts, and tournament results</p>
             
             <div class="nav-buttons">
-                <a href="upload.html" class="nav-link secondary">
+                <a href="/upload/bingo-poker-secret-2025" class="nav-link secondary">
                     Upload Tournament Awards
                 </a>
-                <a href="leaderboard.html" class="nav-link">
+                <a href="/leaderboard" class="nav-link">
                     View Leaderboard
                 </a>
             </div>
@@ -350,14 +350,14 @@
         <!-- Update Avatar Section -->
         <div class="upload-section" style="background: rgba(139, 90, 43, 0.15); border-color: rgba(139, 90, 43, 0.4);">
             <h2>Update Player Avatar</h2>
-            <p>Set avatar emoji for a player</p>
+            <p>Set avatar image path for a player</p>
             <div class="control-group">
                 <label>Player Name</label>
                 <input type="text" id="avatarPlayerName" placeholder="eskimos11">
             </div>
             <div class="control-group">
-                <label>Avatar Emoji</label>
-                <input type="text" id="avatarEmoji" placeholder="🎯" maxlength="2">
+                <label>Avatar Path</label>
+                <input type="text" id="avatarPath" placeholder="/static/eskimos11.png">
             </div>
             <button onclick="updateAvatar()" class="btn btn-success">Update Avatar</button>
         </div>
@@ -396,105 +396,36 @@
             <button onclick="resetAllPoints()" class="btn btn-danger" style="margin-top: 15px;">Reset All Points</button>
         </div>
 
-        <a href="index.html" class="back-link">Back to Awards Board</a>
+        <a href="/" class="back-link">Back to Awards Board</a>
     </div>
 
     <script>
-        // Sample player data based on your leaderboard
-        let playersData = [
-            {
-                player_name: "eskimos11",
-                total_points: 20.53,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 14,
-                avatar: "🎯"
-            },
-            {
-                player_name: "Dafuzzynipples",
-                total_points: 15.23,
-                wins: 3,
-                knockouts: 0,
-                tournaments_played: 9,
-                avatar: "🃏"
-            },
-            {
-                player_name: "spike 06",
-                total_points: 10.35,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 8,
-                avatar: "♠️"
-            },
-            {
-                player_name: "Deanstr8",
-                total_points: 9.88,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 7,
-                avatar: "🎲"
-            },
-            {
-                player_name: "Blazingsun81",
-                total_points: 9.00,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 6,
-                avatar: "☀️"
-            }
-        ];
-
         function loadPlayers() {
-            // For now, use sample data
-            // Later this will fetch from your D1 database via Functions
-            updatePlayersTable(playersData);
-            
-            // TODO: Replace with actual API call
-            // fetch('/api/players')
-            //     .then(response => response.json())
-            //     .then(data => updatePlayersTable(data))
-            //     .catch(error => {
-            //         console.error('Error loading players:', error);
-            //         showError('Failed to load player data');
-            //     });
-        }
-
-        function updatePlayersTable(players) {
-            const tbody = document.getElementById('playersTableBody');
-            
-            if (!players || players.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 40px; color: #999;">
-                            No players yet. Upload a tournament results file to get started!
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            // Sort by total points descending
-            players.sort((a, b) => b.total_points - a.total_points);
-
-            tbody.innerHTML = players.map((player, index) => `
-                <tr>
-                    <td><span class="player-rank">#${index + 1}</span></td>
-                    <td>
-                        <span class="player-avatar">${player.avatar || '👤'}</span>
-                    </td>
-                    <td><strong>${player.player_name}</strong></td>
-                    <td><span class="stat-badge">${player.total_points.toFixed(2)} pts</span></td>
-                    <td><span class="stat-badge" style="background: rgba(212, 165, 116, 0.2);">${player.wins || 0}</span></td>
-                    <td><span class="stat-badge" style="background: rgba(212, 133, 116, 0.2);">${player.knockouts || 0}</span></td>
-                    <td>${player.tournaments_played || 0}</td>
-                    <td>
-                        <input type="number" step="0.01" placeholder="Points" class="edit-input" value="0" id="points-${index}">
-                        <input type="number" placeholder="Wins" class="edit-input edit-input-small" value="0" id="wins-${index}">
-                        <input type="number" placeholder="KOs" class="edit-input edit-input-small" value="0" id="knockouts-${index}">
-                        <button onclick="editPlayer('${player.player_name}', ${index})" class="btn btn-primary">Edit</button>
-                    </td>
-                </tr>
-            `).join('');
+            // Fetch from your actual leaderboard endpoint
+            fetch('/leaderboard')
+                .then(response => response.text())
+                .then(html => {
+                    // For now, show a message that data is loaded from backend
+                    const tbody = document.getElementById('playersTableBody');
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 40px; color: #b8885a;">
+                                Player data loaded from backend. Upload points or edit individual players below.
+                            </td>
+                        </tr>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error loading players:', error);
+                    const tbody = document.getElementById('playersTableBody');
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 40px; color: #d48574;">
+                                Error loading player data
+                            </td>
+                        </tr>
+                    `;
+                });
         }
 
         async function uploadPoints() {
@@ -511,11 +442,25 @@
                 return;
             }
 
-            // TODO: Replace with actual upload
-            // For now, simulate upload
+            const formData = new FormData();
+            formData.append('file', file);
+
             try {
-                showSuccess('Points upload simulated successfully! In production, this would update the database.');
-                fileInput.value = '';
+                // Call your actual points upload endpoint
+                const response = await fetch('/upload/bingo-poker-secret-2025/points', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess('Points uploaded successfully!');
+                    fileInput.value = '';
+                    loadPlayers(); // Reload the player table
+                } else {
+                    showError(`Error: ${result.detail || 'Upload failed'}`);
+                }
             } catch (error) {
                 showError('Upload failed: ' + error.message);
             }
@@ -523,41 +468,63 @@
 
         async function updateAvatar() {
             const playerName = document.getElementById('avatarPlayerName').value;
-            const avatar = document.getElementById('avatarEmoji').value;
+            const avatarPath = document.getElementById('avatarPath').value;
             
-            if (!playerName || !avatar) {
-                showError('Please fill in both player name and avatar');
+            if (!playerName || !avatarPath) {
+                showError('Please fill in both player name and avatar path');
                 return;
             }
 
-            // TODO: Replace with actual API call
-            // For now, simulate update
-            const playerIndex = playersData.findIndex(p => p.player_name === playerName);
-            if (playerIndex >= 0) {
-                playersData[playerIndex].avatar = avatar;
-                updatePlayersTable(playersData);
-                showSuccess(`Avatar updated for ${playerName}`);
-                document.getElementById('avatarPlayerName').value = '';
-                document.getElementById('avatarEmoji').value = '';
-            } else {
-                showError('Player not found');
+            const formData = new FormData();
+            formData.append('player_name', playerName);
+            formData.append('avatar', avatarPath);
+
+            try {
+                // Call your actual avatar update endpoint
+                const response = await fetch('/admin/admin-control-2025/update-avatar', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(`Avatar updated for ${playerName}`);
+                    document.getElementById('avatarPlayerName').value = '';
+                    document.getElementById('avatarPath').value = '';
+                    loadPlayers(); // Reload the player table
+                } else {
+                    showError(`Error: ${result.detail || 'Update failed'}`);
+                }
+            } catch (error) {
+                showError('Update failed: ' + error.message);
             }
         }
 
-        async function editPlayer(playerName, index) {
-            const points = parseFloat(document.getElementById(`points-${index}`).value) || 0;
-            const wins = parseInt(document.getElementById(`wins-${index}`).value) || 0;
-            const knockouts = parseInt(document.getElementById(`knockouts-${index}`).value) || 0;
+        async function editPlayer(playerName, points, wins, knockouts) {
+            const formData = new FormData();
+            formData.append('player_name', playerName);
+            formData.append('points', points);
+            formData.append('wins', wins);
+            formData.append('knockouts', knockouts);
 
-            // TODO: Replace with actual API call
-            // For now, simulate update
-            const playerIndex = playersData.findIndex(p => p.player_name === playerName);
-            if (playerIndex >= 0) {
-                playersData[playerIndex].total_points += points;
-                playersData[playerIndex].wins += wins;
-                playersData[playerIndex].knockouts += knockouts;
-                updatePlayersTable(playersData);
-                showSuccess(`Updated ${playerName}: +${points} points, +${wins} wins, +${knockouts} KOs`);
+            try {
+                // Call your actual edit endpoint
+                const response = await fetch('/admin/admin-control-2025/edit', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(`Updated ${playerName}: +${points} points, +${wins} wins, +${knockouts} KOs`);
+                    loadPlayers(); // Reload the player table
+                } else {
+                    showError(`Error: ${result.detail || 'Edit failed'}`);
+                }
+            } catch (error) {
+                showError('Edit failed: ' + error.message);
             }
         }
 
@@ -566,16 +533,23 @@
                 return;
             }
 
-            // TODO: Replace with actual API call
-            // For now, simulate reset
-            playersData.forEach(player => {
-                player.total_points = 0;
-                player.wins = 0;
-                player.knockouts = 0;
-                player.tournaments_played = 0;
-            });
-            updatePlayersTable(playersData);
-            showSuccess('All player points have been reset');
+            try {
+                // Call your actual reset endpoint
+                const response = await fetch('/admin/admin-control-2025/reset', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess('All player points have been reset');
+                    loadPlayers(); // Reload the player table
+                } else {
+                    showError(`Error: ${result.detail || 'Reset failed'}`);
+                }
+            } catch (error) {
+                showError('Reset failed: ' + error.message);
+            }
         }
 
         function showSuccess(message) {
