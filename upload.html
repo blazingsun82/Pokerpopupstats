@@ -325,16 +325,16 @@
     <div class="container">
         <div class="header">
             <div class="logo-container">
-                <img src="eskimos11.png" alt="Bingo Poker Pro's Logo" class="logo">
+                <img src="images/logo.png" alt="Bingo Poker Pro's Logo" class="logo">
             </div>
             <h1>Bingo Poker Pro's Presents</h1>
             <p>Upload your PokerStars hand history to update the awards board</p>
             
             <div class="nav-buttons">
-                <a href="admin.html" class="nav-link secondary">
+                <a href="/admin/admin-control-2025" class="nav-link secondary">
                     Manage Points & Leaderboard
                 </a>
-                <a href="index.html" class="nav-link">
+                <a href="/" class="nav-link">
                     View Awards Board
                 </a>
             </div>
@@ -358,7 +358,7 @@
             </div>
 
             <div style="text-align: center; margin-top: 20px;">
-                <a href="index.html" class="view-board-btn">View Awards Board</a>
+                <a href="/" class="view-board-btn">View Awards Board</a>
             </div>
         </div>
 
@@ -382,51 +382,21 @@
         const awardsGrid = document.getElementById('awardsGrid');
         const lastUpdatedEl = document.getElementById('lastUpdated');
 
-        // Sample current awards data
-        const sampleAwards = {
-            tournament_date: "October 17, 2025",
-            awards: {
-                "🏆 Tournament Champion": {
-                    winner: "YourUsername",
-                    stat: "1st Place"
-                },
-                "🥈 Runner-up": {
-                    winner: "Player2",
-                    stat: "2nd Place"
-                },
-                "🎭 Hollywood Actor": {
-                    winner: "Player3",
-                    stat: "Best Bluffer"
-                },
-                "📈 Comeback Kid": {
-                    winner: "Player4",
-                    stat: "Best Recovery"
-                },
-                "🎲 YOLO Award": {
-                    winner: "Player5",
-                    stat: "Biggest Risk Taker"
-                },
-                "🏊 Doggy Paddling Award": {
-                    winner: "Player6",
-                    stat: "Shortest Stack Survival"
-                }
-            }
-        };
-
         // Load current awards on page load
         function loadCurrentAwards() {
-            // For now, use sample data
-            // Later this will fetch from your D1 database via Functions
-            updateAwardsDisplay(sampleAwards);
-            
-            // TODO: Replace with actual API call
-            // fetch('/api/current-awards')
-            //     .then(response => response.json())
-            //     .then(data => updateAwardsDisplay(data))
-            //     .catch(error => {
-            //         console.error('Error loading awards:', error);
-            //         awardsGrid.innerHTML = '<div class="loading-awards" style="color: #d48574;">Error loading awards</div>';
-            //     });
+            // Fetch from your actual API endpoint
+            fetch('/')
+                .then(response => response.text())
+                .then(html => {
+                    // Parse the current awards from the main page
+                    // For now, just show loading message
+                    lastUpdatedEl.textContent = 'Last updated: Just now';
+                    awardsGrid.innerHTML = '<div class="loading-awards">Current awards loaded from main page</div>';
+                })
+                .catch(error => {
+                    console.error('Error loading awards:', error);
+                    awardsGrid.innerHTML = '<div class="loading-awards" style="color: #d48574;">Error loading awards</div>';
+                });
         }
 
         uploadArea.addEventListener('click', () => {
@@ -473,24 +443,20 @@
             clearMessages();
 
             try {
-                // TODO: Replace with actual upload endpoint
-                // For now, simulate upload
-                await simulateUpload(file);
-                
-                // Actual upload code (when Functions are ready):
-                // const response = await fetch('/api/upload-tournament', {
-                //     method: 'POST',
-                //     body: formData
-                // });
-                //
-                // const result = await response.json();
-                //
-                // if (response.ok) {
-                //     showMessage('Awards updated successfully! The board will update automatically.', 'success');
-                //     updateAwardsDisplay(result.results);
-                // } else {
-                //     showMessage(`Error: ${result.detail || 'Unknown error'}`, 'error');
-                // }
+                // Call your actual Python endpoint
+                const response = await fetch('/upload/bingo-poker-secret-2025/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('Awards updated successfully! The board will update automatically.', 'success');
+                    updateAwardsDisplay(result.results);
+                } else {
+                    showMessage(`Error: ${result.detail || 'Unknown error'}`, 'error');
+                }
             } catch (error) {
                 showMessage(`Upload failed: ${error.message}`, 'error');
             } finally {
@@ -498,25 +464,6 @@
                 uploadArea.style.display = 'block';
                 fileInput.value = '';
             }
-        }
-
-        async function simulateUpload(file) {
-            // Simulate processing time
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Simulate successful upload
-            showMessage('Upload simulation complete! In production, this would process your hand history.', 'success');
-            
-            // Show updated awards with new timestamp
-            const updatedAwards = {
-                ...sampleAwards,
-                tournament_date: new Date().toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                })
-            };
-            updateAwardsDisplay(updatedAwards);
         }
 
         function showMessage(message, type) {
