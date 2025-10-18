@@ -383,7 +383,7 @@
                 <span class="live-dot"></span>
                 Live Updates
             </div>
-            <a href="https://pokerpopupstats.onrender.com/leaderboard" class="leaderboard-link">
+            <a href="leaderboard.html" class="leaderboard-link">
                 Season Leaderboard
             </a>
         </div>
@@ -396,15 +396,6 @@
             <div class="awards-grid" id="awardsGrid">
                 <div class="loading">Loading tournament results...</div>
             </div>
-        </div>
-
-        <div id="preparationHClub" style="display: none;" class="special-section">
-            <h3>Preparation H Club</h3>
-            <p style="margin-bottom: 20px; font-size: 1.1em;">
-                <em>"Had it on the flop... robbed on the river"</em>
-            </p>
-            <ul class="bad-beat-list" id="badBeatsList">
-            </ul>
         </div>
 
         <div class="tournament-stats">
@@ -436,39 +427,43 @@
             connectionStatus.className = 'stats-value connection-status loading';
 
             try {
+                console.log('Fetching tournament data from Render...');
+                
                 // Fetch tournament data from Render backend
                 const response = await fetch('https://pokerpopupstats.onrender.com/', {
                     method: 'GET',
                     headers: {
-                        'Accept': 'text/html'
+                        'Accept': 'text/html',
+                        'Cache-Control': 'no-cache'
                     }
                 });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const html = await response.text();
+                console.log('Received HTML response, parsing...');
+                
                 const data = extractDataFromHTML(html);
                 
-                if (data) {
+                if (data && data.awards && Object.keys(data.awards).length > 0) {
+                    console.log('Successfully extracted tournament data:', data);
                     updateBoard(data);
                     connectionStatus.textContent = 'Connected';
                     connectionStatus.className = 'stats-value';
                 } else {
-                    throw new Error('Unable to parse tournament data');
+                    console.log('No real tournament data found, showing fallback');
+                    throw new Error('No tournament data available - showing fallback');
                 }
 
             } catch (error) {
                 console.error('Error loading tournament data:', error);
-                connectionStatus.textContent = 'Render Sleeping';
+                connectionStatus.textContent = 'Backend Offline';
                 connectionStatus.className = 'stats-value connection-status error';
                 
-                // If this is the first load and it fails, show fallback content
-                const awardsGrid = document.getElementById('awardsGrid');
-                if (awardsGrid.innerHTML.includes('Loading tournament results')) {
-                    showFallbackContent();
-                }
+                // Show fallback content
+                showFallbackContent();
             }
         }
 
@@ -502,19 +497,34 @@
                     }
                 });
 
-                // Extract bad beats
+                // Extract bad beats from Preparation H Club section
                 const preparation_h_club = [];
-                const badBeatsList = doc.querySelector('.bad-beat-list');
-                if (badBeatsList) {
-                    const badBeats = badBeatsList.querySelectorAll('li');
-                    badBeats.forEach(beat => {
-                        const text = beat.textContent.trim();
-                        // Simple parsing of bad beat text
-                        preparation_h_club.push({ description: text });
-                    });
+                const badBeatsSection = doc.querySelector('.special-section');
+                if (badBeatsSection) {
+                    const badBeatsList = badBeatsSection.querySelector('.bad-beat-list');
+                    if (badBeatsList) {
+                        const badBeats = badBeatsList.querySelectorAll('li');
+                        badBeats.forEach(beat => {
+                            const text = beat.textContent.trim();
+                            // Parse the bad beat text format: "💔 player lost hand to winner with hand"
+                            const match = text.match(/💔\s*(.+?)\s+lost\s+(.+?)\s+to\s+(.+?)\s+with\s+(.+)/);
+                            if (match) {
+                                preparation_h_club.push({
+                                    victim: match[1],
+                                    victim_hand: match[2],
+                                    winner: match[3],
+                                    winner_hand: match[4],
+                                    description: text
+                                });
+                            } else {
+                                // Fallback for other formats
+                                preparation_h_club.push({ description: text });
+                            }
+                        });
+                    }
                 }
 
-                // Extract total players
+                // Extract total players from stats
                 const playersStatEl = doc.querySelector('.stats-value');
                 const total_players = playersStatEl ? parseInt(playersStatEl.textContent) || 0 : Object.keys(awards).length;
 
@@ -586,31 +596,55 @@
         }
 
         function updatePreparationHClub(preparationHClub) {
-            const section = document.getElementById('preparationHClub');
-            const list = document.getElementById('badBeatsList');
+            // Remove existing section if any
+            const existingSection = document.querySelector('.special-section');
+            if (existingSection) {
+                existingSection.remove();
+            }
             
+            // Add new section if there are bad beats
             if (preparationHClub && preparationHClub.length > 0) {
-                list.innerHTML = '';
-                preparationHClub.forEach(badBeat => {
-                    const li = document.createElement('li');
-                    li.textContent = badBeat.description || `${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}`;
-                    list.appendChild(li);
-                });
-                section.style.display = 'block';
-            } else {
-                section.style.display = 'none';
+                const sectionHTML = `
+                    <div class="special-section">
+                        <h3>🩹 Preparation H Club</h3>
+                        <p style="margin-bottom: 20px; font-size: 1.1em; color: #b8885a;">
+                            <em>"Had it on the flop... robbed on the river"</em>
+                        </p>
+                        <ul class="bad-beat-list" style="list-style: none; padding: 0;">
+                            ${preparationHClub.map(badBeat => 
+                                `<li style="background: rgba(212, 133, 116, 0.1); padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #d48574;">
+                                    ${badBeat.description || `💔 ${badBeat.victim} lost ${badBeat.victim_hand} to ${badBeat.winner} with ${badBeat.winner_hand}`}
+                                </li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+                
+                // Insert before tournament stats
+                const tournamentStats = document.querySelector('.tournament-stats');
+                if (tournamentStats) {
+                    tournamentStats.insertAdjacentHTML('beforebegin', sectionHTML);
+                }
             }
         }
 
         function showFallbackContent() {
             const awardsGrid = document.getElementById('awardsGrid');
             awardsGrid.innerHTML = `
-                <div class="loading">
-                    <div style="margin-bottom: 16px;">Render backend is sleeping</div>
-                    <div style="font-size: 0.9em; color: #999;">
-                        The backend will wake up when new tournaments are uploaded.
-                        <br>Check back in a few minutes or visit the 
-                        <a href="https://pokerpopupstats.onrender.com/" style="color: #d4a574;">Render site directly</a>.
+                <div class="award-card">
+                    <div class="award-title">
+                        <span class="award-emoji">⚠️</span>
+                        <span>Backend Offline</span>
+                    </div>
+                    <div class="award-winner">No Live Data</div>
+                    <div class="award-description">
+                        The Render backend is currently sleeping or unavailable. 
+                        Real tournament results are stored there and will appear when the backend wakes up.
+                    </div>
+                    <div class="award-stat">
+                        <a href="https://pokerpopupstats.onrender.com/" target="_blank" style="color: #d4a574; text-decoration: none;">
+                            Visit Render Site Directly →
+                        </a>
                     </div>
                 </div>
             `;
