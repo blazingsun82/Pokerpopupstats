@@ -207,6 +207,26 @@
             text-decoration: underline;
         }
 
+        .connection-status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .connection-status.connected {
+            background: rgba(139, 90, 43, 0.2);
+            color: #d4a574;
+            border: 1px solid rgba(139, 90, 43, 0.4);
+        }
+
+        .connection-status.error {
+            background: rgba(139, 43, 43, 0.2);
+            color: #d48574;
+            border: 1px solid rgba(139, 43, 43, 0.4);
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2.2em;
@@ -245,121 +265,54 @@
             <p>Season Leaderboard</p>
         </div>
 
+        <div id="connectionStatus" class="connection-status" style="display: none;"></div>
+
         <div class="leaderboard-table" id="leaderboardContainer">
             <div class="loading">Loading leaderboard data...</div>
         </div>
 
         <div style="text-align: center;">
-            <a href="index.html" class="back-link">← Back to Awards Board</a>
+            <a href="/" class="back-link">← Back to Awards Board</a>
         </div>
     </div>
 
     <script>
-        // Sample leaderboard data for testing
-        const sampleLeaderboardData = [
-            {
-                player_name: "eskimos11",
-                total_points: 20.53,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 14,
-                avatar: "🎯"
-            },
-            {
-                player_name: "Dafuzzynipples",
-                total_points: 15.23,
-                wins: 3,
-                knockouts: 0,
-                tournaments_played: 9,
-                avatar: "🃏"
-            },
-            {
-                player_name: "spike 06",
-                total_points: 10.35,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 8,
-                avatar: "♠️"
-            },
-            {
-                player_name: "Deanstr8",
-                total_points: 9.88,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 7,
-                avatar: "🎲"
-            },
-            {
-                player_name: "Blazingsun81",
-                total_points: 9.00,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 6,
-                avatar: "☀️"
-            },
-            {
-                player_name: "edsterfedor",
-                total_points: 7.61,
-                wins: 2,
-                knockouts: 0,
-                tournaments_played: 5,
-                avatar: "🎪"
-            },
-            {
-                player_name: "scottyred123",
-                total_points: 5.90,
-                wins: 1,
-                knockouts: 0,
-                tournaments_played: 4,
-                avatar: "🔴"
-            },
-            {
-                player_name: "stellalouise",
-                total_points: 3.51,
-                wins: 1,
-                knockouts: 0,
-                tournaments_played: 3,
-                avatar: "⭐"
-            },
-            {
-                player_name: "Trofimuk",
-                total_points: 3.31,
-                wins: 0,
-                knockouts: 0,
-                tournaments_played: 2,
-                avatar: "🏆"
-            },
-            {
-                player_name: "Sicknickel",
-                total_points: 2.90,
-                wins: 0,
-                knockouts: 0,
-                tournaments_played: 2,
-                avatar: "🪙"
-            },
-            {
-                player_name: "LadyAces1980",
-                total_points: 2.79,
-                wins: 0,
-                knockouts: 0,
-                tournaments_played: 1,
-                avatar: "👸"
-            }
-        ];
-
         function loadLeaderboardData() {
-            // For now, use sample data
-            // Later this will fetch from your D1 database via Functions
-            updateLeaderboard(sampleLeaderboardData);
+            const statusEl = document.getElementById('connectionStatus');
             
-            // TODO: Replace with actual API call
-            // fetch('/api/leaderboard')
-            //     .then(response => response.json())
-            //     .then(data => updateLeaderboard(data))
-            //     .catch(error => {
-            //         console.error('Error loading leaderboard:', error);
-            //         showError('Failed to load leaderboard data');
-            //     });
+            // Fetch from Cloudflare Functions
+            fetch('/leaderboard')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Leaderboard data received:', data);
+                    updateLeaderboard(data);
+                    
+                    // Show connection status
+                    statusEl.textContent = 'Connected to database';
+                    statusEl.className = 'connection-status connected';
+                    statusEl.style.display = 'block';
+                    
+                    // Hide status after 3 seconds
+                    setTimeout(() => {
+                        statusEl.style.display = 'none';
+                    }, 3000);
+                })
+                .catch(error => {
+                    console.error('Error loading leaderboard:', error);
+                    
+                    // Show error status
+                    statusEl.textContent = 'Database connection failed - no data available';
+                    statusEl.className = 'connection-status error';
+                    statusEl.style.display = 'block';
+                    
+                    // Show empty state instead of sample data
+                    updateLeaderboard([]);
+                });
         }
 
         function updateLeaderboard(players) {
@@ -368,15 +321,15 @@
             if (!players || players.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <h2>No Data Yet</h2>
-                        <p>Points will appear here once tournaments are recorded</p>
+                        <h2>No Players Yet</h2>
+                        <p>Player points will appear here once tournaments are recorded and points are added through the admin panel</p>
                     </div>
                 `;
                 return;
             }
 
             // Sort players by total points descending
-            players.sort((a, b) => b.total_points - a.total_points);
+            players.sort((a, b) => (b.total_points || 0) - (a.total_points || 0));
 
             const tableHTML = `
                 <table>
@@ -398,6 +351,13 @@
                             else if (rank === 2) rankClass = 'rank-2';
                             else if (rank === 3) rankClass = 'rank-3';
 
+                            // Generate avatar if not provided
+                            let avatar = player.avatar;
+                            if (!avatar) {
+                                const avatars = ['🎯', '🃏', '♠️', '🎲', '☀️', '🎪', '🔴', '⭐', '🏆', '🪙', '👸', '🤖', '🎭', '🎨', '🎺'];
+                                avatar = avatars[index % avatars.length];
+                            }
+
                             return `
                                 <tr>
                                     <td class="rank-cell">
@@ -405,14 +365,12 @@
                                     </td>
                                     <td>
                                         <div class="player-cell">
-                                            <div class="avatar">
-                                                ${player.avatar || '👤'}
-                                            </div>
+                                            <div class="avatar">${avatar}</div>
                                             <span>${player.player_name}</span>
                                         </div>
                                     </td>
                                     <td class="stat-cell stat-points">
-                                        ${player.total_points.toFixed(2)}
+                                        ${(player.total_points || 0).toFixed(2)}
                                     </td>
                                     <td class="stat-cell stat-wins">
                                         ${player.wins || 0}
@@ -447,8 +405,8 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadLeaderboardData();
             
-            // Set up periodic refresh (every 30 seconds)
-            setInterval(loadLeaderboardData, 30000);
+            // Set up periodic refresh (every 2 minutes)
+            setInterval(loadLeaderboardData, 120000);
         });
     </script>
 </body>
