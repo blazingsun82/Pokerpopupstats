@@ -30,6 +30,7 @@ export default {
       } else if (path === '/upload/bingo-poker-secret-2025/process' && request.method === 'POST') {
         return await handleTournamentUpload(request, env, corsHeaders);
       } else if (path === '/api/tournament-data' && request.method === 'GET') {
+        console.log('API tournament data request');
         return await handleApiData(env, corsHeaders);
       } else if (path === '/api/players-data' && request.method === 'GET') {
         return await handlePlayersData(env, corsHeaders);
@@ -340,11 +341,28 @@ async function handleTournamentUpload(request, env, corsHeaders) {
 // API data handler
 async function handleApiData(env, corsHeaders) {
   try {
+    console.log('API data request received');
+    
+    // Check if DB is available
+    if (!env.DB) {
+      console.error('Database binding not found');
+      return new Response(JSON.stringify({
+        tournament_date: 'Database not connected',
+        total_players: 0,
+        awards: {},
+        preparation_h_club: []
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     const latestTournament = await env.DB.prepare(`
       SELECT * FROM tournaments 
       ORDER BY created_at DESC 
       LIMIT 1
     `).first();
+
+    console.log('Latest tournament from DB:', latestTournament);
 
     let tournamentData = {
       tournament_date: 'No tournaments yet',
@@ -353,8 +371,13 @@ async function handleApiData(env, corsHeaders) {
       preparation_h_club: []
     };
 
-    if (latestTournament) {
-      tournamentData = JSON.parse(latestTournament.data);
+    if (latestTournament && latestTournament.data) {
+      try {
+        tournamentData = JSON.parse(latestTournament.data);
+        console.log('Parsed tournament data:', tournamentData);
+      } catch (parseError) {
+        console.error('Error parsing tournament data:', parseError);
+      }
     }
 
     return new Response(JSON.stringify(tournamentData), {
@@ -364,9 +387,13 @@ async function handleApiData(env, corsHeaders) {
   } catch (error) {
     console.error('Error in handleApiData:', error);
     return new Response(JSON.stringify({
-      error: 'Failed to fetch tournament data'
+      tournament_date: 'Error loading data',
+      total_players: 0,
+      awards: {},
+      preparation_h_club: [],
+      error: error.message
     }), {
-      status: 500,
+      status: 200, // Return 200 so it doesn't trigger error pages
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
