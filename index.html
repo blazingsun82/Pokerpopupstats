@@ -469,19 +469,30 @@
 
         function extractDataFromHTML(html) {
             try {
+                console.log('Parsing HTML response...');
+                
                 // Create a temporary DOM to parse the HTML response
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 
+                // Check if this is actually a tournament results page
+                const title = doc.querySelector('title');
+                if (!title || !title.textContent.includes('Poker')) {
+                    console.log('Not a poker results page');
+                    return null;
+                }
+                
                 // Extract tournament date
                 const tournamentDateEl = doc.querySelector('.tournament-info');
                 const tournament_date = tournamentDateEl ? tournamentDateEl.textContent.trim() : new Date().toLocaleDateString();
+                console.log('Tournament date:', tournament_date);
                 
-                // Extract awards data
+                // Extract awards data - look for award cards
                 const awards = {};
                 const awardCards = doc.querySelectorAll('.award-card');
+                console.log('Found award cards:', awardCards.length);
                 
-                awardCards.forEach(card => {
+                awardCards.forEach((card, index) => {
                     const titleEl = card.querySelector('.award-title');
                     const winnerEl = card.querySelector('.award-winner');
                     const descEl = card.querySelector('.award-description');
@@ -489,11 +500,20 @@
                     
                     if (titleEl && winnerEl) {
                         const title = titleEl.textContent.trim();
+                        const winner = winnerEl.textContent.trim();
+                        
+                        // Skip if this looks like sample/placeholder data
+                        if (winner.includes('Player') || winner === 'No Live Data' || winner === '-') {
+                            console.log('Skipping placeholder data:', winner);
+                            return;
+                        }
+                        
                         awards[title] = {
-                            winner: winnerEl.textContent.trim(),
+                            winner: winner,
                             description: descEl ? descEl.textContent.trim() : '',
                             stat: statEl ? statEl.textContent.trim() : ''
                         };
+                        console.log(`Award ${index + 1}:`, title, '->', winner);
                     }
                 });
 
@@ -506,18 +526,7 @@
                         const badBeats = badBeatsList.querySelectorAll('li');
                         badBeats.forEach(beat => {
                             const text = beat.textContent.trim();
-                            // Parse the bad beat text format: "💔 player lost hand to winner with hand"
-                            const match = text.match(/💔\s*(.+?)\s+lost\s+(.+?)\s+to\s+(.+?)\s+with\s+(.+)/);
-                            if (match) {
-                                preparation_h_club.push({
-                                    victim: match[1],
-                                    victim_hand: match[2],
-                                    winner: match[3],
-                                    winner_hand: match[4],
-                                    description: text
-                                });
-                            } else {
-                                // Fallback for other formats
+                            if (text && !text.includes('placeholder')) {
                                 preparation_h_club.push({ description: text });
                             }
                         });
@@ -525,15 +534,31 @@
                 }
 
                 // Extract total players from stats
-                const playersStatEl = doc.querySelector('.stats-value');
-                const total_players = playersStatEl ? parseInt(playersStatEl.textContent) || 0 : Object.keys(awards).length;
+                const statsElements = doc.querySelectorAll('.stats-value');
+                let total_players = 0;
+                statsElements.forEach(el => {
+                    const text = el.textContent.trim();
+                    if (!isNaN(text) && parseInt(text) > 0) {
+                        total_players = parseInt(text);
+                    }
+                });
 
-                return {
+                const result = {
                     tournament_date,
-                    total_players,
+                    total_players: total_players || Object.keys(awards).length,
                     awards,
                     preparation_h_club
                 };
+                
+                console.log('Extracted data:', result);
+                
+                // Only return data if we found real awards (not empty or placeholder)
+                if (Object.keys(awards).length > 0) {
+                    return result;
+                } else {
+                    console.log('No real awards found in HTML');
+                    return null;
+                }
 
             } catch (error) {
                 console.error('Error parsing HTML:', error);
@@ -633,19 +658,15 @@
             awardsGrid.innerHTML = `
                 <div class="award-card">
                     <div class="award-title">
-                        <span class="award-emoji">⚠️</span>
-                        <span>Backend Offline</span>
+                        <span class="award-emoji">⏳</span>
+                        <span>Waiting for Tournament Data</span>
                     </div>
-                    <div class="award-winner">No Live Data</div>
+                    <div class="award-winner">No Recent Tournaments</div>
                     <div class="award-description">
-                        The Render backend is currently sleeping or unavailable. 
-                        Real tournament results are stored there and will appear when the backend wakes up.
+                        Upload a tournament file using the admin panel to see live results here. 
+                        Awards will appear automatically once the tournament is processed.
                     </div>
-                    <div class="award-stat">
-                        <a href="https://pokerpopupstats.onrender.com/" target="_blank" style="color: #d4a574; text-decoration: none;">
-                            Visit Render Site Directly →
-                        </a>
-                    </div>
+                    <div class="award-stat">Ready for next tournament</div>
                 </div>
             `;
         }
