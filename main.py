@@ -304,7 +304,7 @@ if DATABASE_URL:
 else:
     print("WARNING: DATABASE_URL not set - database features disabled")
 
-# Awards calculation logic (unchanged)
+# Awards calculation logic (FIXED VERSION)
 class PokerAwardsParser:
     def parse_txt(self, content: bytes) -> Dict[str, Any]:
         """Parse poker text file and calculate awards"""
@@ -715,7 +715,12 @@ class PokerAwardsParser:
         return False
     
     def _determine_final_positions(self, players: Dict, full_text: str):
-        """Determine final tournament positions - Top 3 only"""
+        """Determine final tournament positions - Top 3 only (FIXED VERSION)"""
+        # Initialize all positions as None first
+        for name in players:
+            if name != 'tournament_info':
+                players[name]['final_position'] = None
+        
         # Find the final hand (last one in the file)
         hands = re.findall(r'(PokerStars Hand #\d+: Tournament #\d+.*?)(?=PokerStars Hand #\d+: Tournament #\d+|\Z)', full_text, re.DOTALL)
         
@@ -748,14 +753,15 @@ class PokerAwardsParser:
         
         if unassigned:
             # Sort by max chips and assign 3rd place to the top player
-            unassigned.sort(key=lambda x: x[1]['max_chips'], reverse=True)
-            third_place_player = unassigned[0]
-            players[third_place_player[0]]['final_position'] = 3
-        
-        # Everyone else gets None (no specific position tracked)
+            unassigned.sort(key=lambda x: x[1].get('max_chips', 0), reverse=True)
+            if unassigned:  # Double check we have players
+                third_place_player = unassigned[0]
+                players[third_place_player[0]]['final_position'] = 3
+
+        # Everyone else stays None (no specific position tracked)
     
     def _calculate_awards(self, players_data: Dict[str, Dict]) -> Dict[str, Dict]:
-        """Calculate fun club-style awards from parsed player data"""
+        """Calculate fun club-style awards from parsed player data (FIXED VERSION)"""
         players = {k: v for k, v in players_data.items() if k != 'tournament_info'}
         
         if not players:
@@ -792,10 +798,10 @@ class PokerAwardsParser:
         
         # Most Aggressive
         aggressive_players = [(name, data) for name, data in players.items() 
-                            if data['hands_played'] > 5 and name not in awarded_players]
+                            if data.get('hands_played', 0) > 5 and name not in awarded_players]
         if aggressive_players:
             most_aggressive = max(aggressive_players, 
-                                key=lambda x: x[1]['aggressive_actions'] / max(x[1]['hands_played'], 1))
+                                key=lambda x: x[1].get('aggressive_actions', 0) / max(x[1].get('hands_played', 1), 1))
             awards["🔥 Most Aggressive"] = {
                 "winner": most_aggressive[0],
                 "description": "Fearless bets and raises kept everyone on edge",
@@ -804,11 +810,11 @@ class PokerAwardsParser:
             awarded_players.add(most_aggressive[0])
         
         # Calling Station
-        calling_candidates = [(name, data) for name, data in aggressive_players
-                             if name not in awarded_players]
+        calling_candidates = [(name, data) for name, data in players.items()
+                             if name not in awarded_players and data.get('hands_played', 0) > 5]
         if calling_candidates:
             calling_station = max(calling_candidates,
-                                key=lambda x: x[1]['calls'] / max(x[1]['hands_played'], 1))
+                                key=lambda x: x[1].get('calls', 0) / max(x[1].get('hands_played', 1), 1))
             awards["📞 Calling Station"] = {
                 "winner": calling_station[0],
                 "description": "Never saw a bet they didn't want to call",
@@ -817,11 +823,11 @@ class PokerAwardsParser:
             awarded_players.add(calling_station[0])
         
         # Tightest Player (CORRECTED - excludes calling station winner)
-        tight_candidates = [(name, data) for name, data in aggressive_players
-                           if name not in awarded_players]
+        tight_candidates = [(name, data) for name, data in players.items()
+                           if name not in awarded_players and data.get('hands_played', 0) > 5]
         if tight_candidates:
             tightest = min(tight_candidates,
-                         key=lambda x: x[1]['hands_voluntarily_played'] / max(x[1]['hands_played'], 1))
+                         key=lambda x: x[1].get('hands_voluntarily_played', 0) / max(x[1].get('hands_played', 1), 1))
             awards["🧊 Tightest Player"] = {
                 "winner": tightest[0],
                 "description": "Plays only a small, selective number of hands and is not afraid to be aggressive with premium holdings",
@@ -851,15 +857,16 @@ class PokerAwardsParser:
         
         # Comeback Kid - Largest comeback from smallest chip stack
         comeback_candidates = []
-        min_chips = min(data.get('max_chips', 0) for data in players.values())
-        
-        for name, data in players.items():
-            if name in awarded_players:
-                continue
-            final_pos = data.get('final_position', len(players))
-            if data.get('max_chips', 0) <= min_chips * 2 and final_pos <= len(players) // 2:
-                comeback_score = (len(players) - final_pos) / max(data.get('max_chips', 1), 1)
-                comeback_candidates.append((name, data, comeback_score))
+        if players:
+            min_chips = min(data.get('max_chips', 0) for data in players.values())
+            
+            for name, data in players.items():
+                if name in awarded_players:
+                    continue
+                final_pos = data.get('final_position')
+                if final_pos is not None and data.get('max_chips', 0) <= min_chips * 2 and final_pos <= len(players) // 2:
+                    comeback_score = (len(players) - final_pos) / max(data.get('max_chips', 1), 1)
+                    comeback_candidates.append((name, data, comeback_score))
         
         if comeback_candidates:
             comeback_candidates.sort(key=lambda x: x[2], reverse=True)
@@ -890,7 +897,7 @@ class PokerAwardsParser:
                             if name not in awarded_players and data.get('bets', 0) > 2]
         if bluffer_candidates:
             hollywood_actor = max(bluffer_candidates,
-                                key=lambda x: x[1]['bets'] / max(x[1].get('showdowns', 1), 1))
+                                key=lambda x: x[1].get('bets', 0) / max(x[1].get('showdowns', 1), 1))
             awards["🎭 Hollywood Actor"] = {
                 "winner": hollywood_actor[0],
                 "description": "Most bluffs attempted (successful or failed)",
@@ -922,8 +929,9 @@ class PokerAwardsParser:
         for name, data in players.items():
             if name in awarded_players:
                 continue
-            if data['hands_played'] > 10:
-                vpip = data['hands_voluntarily_played'] / data['hands_played']
+            hands_played = data.get('hands_played', 0)
+            if hands_played > 10:
+                vpip = data.get('hands_voluntarily_played', 0) / hands_played
                 win_rate = data.get('showdown_wins', 0) / max(data.get('showdowns', 1), 1)
                 
                 if vpip > 0.4 and win_rate < 0.3:
@@ -938,13 +946,14 @@ class PokerAwardsParser:
                 awards["🐴 Donkey"] = {
                     "winner": worst_player[0],
                     "description": "Made questionable decisions and played too many weak hands",
-                    "stat": f"Played {int(worst_player[1]['hands_voluntarily_played'] / worst_player[1]['hands_played'] * 100)}% of hands with poor results"
+                    "stat": f"Played {int(worst_player[1].get('hands_voluntarily_played', 0) / worst_player[1].get('hands_played', 1) * 100)}% of hands with poor results"
                 }
                 awarded_players.add(worst_player[0])
         
         # ABC Player
-        abc_candidates = [(name, data) for name, data in aggressive_players
-                        if name not in awarded_players and 0.15 < (data['aggressive_actions'] / data['hands_played']) < 0.35]
+        abc_candidates = [(name, data) for name, data in players.items()
+                        if name not in awarded_players and data.get('hands_played', 0) > 5 and 
+                        0.15 < (data.get('aggressive_actions', 0) / data.get('hands_played', 1)) < 0.35]
         if abc_candidates:
             abc_player = max(abc_candidates, 
                            key=lambda x: x[1].get('showdown_wins', 0))
